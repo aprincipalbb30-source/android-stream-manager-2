@@ -1,0 +1,71 @@
+{
+  "security": {
+    "tls": {
+      "enabled": true,
+      "min_version": "TLS1.3",
+      "certificate_authority": "./certs/ca.crt",
+      "client_certificate": "./certs/client.crt",
+      "private_key": "./certs/client.key",
+      "cipher_suites": [
+        "TLS_AES_256_GCM_SHA384",
+        "TLS_CHACHA20_POLY1305_SHA256"
+      ]
+    },
+    "jwt": {
+      "issuer": "android-stream-manager",
+      "audience": "corporate-clients",
+      "key_rotation_hours": 12,
+      "token_lifetime_hours": 8
+    },
+    "signing": {
+      "keystore_path": "./keys/corporate.keystore",
+      "keystore_password_env": "KEYSTORE_PASSWORD",
+      "key_alias": "corporate",
+      "signature_schemes": ["v1", "v2", "v3"]
+    }
+  },
+  "compliance": {
+    "require_explicit_consent": true,
+    "max_session_duration_hours": 8,
+    "data_retention_days": 90,
+    "audit_log_enabled": true,
+    "sensitive_permissions": [
+      "CAMERA",
+      "MICROPHONE",
+      "LOCATION"
+    ]
+  },
+  "optimization": {
+    "thread_pool_size": 8,
+    "build_cache_size_mb": 2048,
+    "stream_compression": {
+      "enabled": true,
+      "algorithm": "lz4",
+      "min_compression_ratio": 1.2
+    },
+    "adaptive_streaming": {
+      "enabled": true,
+      "min_bitrate_kbps": 500,
+      "max_bitrate_kbps": 8000,
+      "target_framerate": 30
+    }
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "./logs/system.log",
+    "max_size_mb": 100,
+    "backup_count": 5
+  },
+  "network": {
+    "server": {
+      "host": "0.0.0.0",
+      "port": 8443,
+      "max_connections": 1000
+    },
+    "timeouts": {
+      "connection_seconds": 30,
+      "read_seconds": 60,
+      "write_seconds": 60
+    }
+  }
+}
