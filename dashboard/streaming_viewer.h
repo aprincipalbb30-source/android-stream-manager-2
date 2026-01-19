@@ -16,6 +16,8 @@
 #include <QResizeEvent>
 #include <QFrame>
 #include <QSplitter>
+#include <QWebSocket>
+#include <QUrl>
 #include <memory>
 #include <vector>
 #include <atomic>
@@ -84,6 +86,12 @@ public slots:
     void onDeviceDisconnected();
     void onConnectionError(const QString& error);
 
+    // WebSocket slots
+    void onWebSocketConnected();
+    void onWebSocketDisconnected();
+    void onWebSocketError(QAbstractSocket::SocketError error);
+    void onWebSocketMessageReceived(const QString& message);
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void resizeEvent(QResizeEvent *event) override;
@@ -124,6 +132,17 @@ private:
     void decodeH264Frame(const QByteArray& encodedData, qint64 timestamp,
                         bool isKeyFrame, int width, int height);
     void connectToVideoStream();
+
+    // WebSocket connection
+    void connectToServer(const QString& serverUrl = "ws://localhost:8443");
+    void disconnectFromServer();
+    void sendWebSocketMessage(const QString& message);
+    void authenticateWithServer();
+
+    // WebSocket para conectar ao servidor
+    QWebSocket* webSocket_;
+    bool isConnected_;
+    QString serverUrl_;
 
     // Estado interno
     QString deviceId_;

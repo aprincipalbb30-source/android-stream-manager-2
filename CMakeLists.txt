@@ -153,7 +153,7 @@ target_link_libraries(core_lib
 
 # Dashboard Qt
 if(BUILD_DASHBOARD)
-    find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia)
+    find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia WebSockets)
 
     if(Qt6_FOUND)
         # Configurar Qt6
@@ -177,6 +177,7 @@ if(BUILD_DASHBOARD)
             Qt6::Widgets
             Qt6::Network
             Qt6::Multimedia
+            Qt6::WebSockets
         )
 
         # Configurações específicas do Qt
