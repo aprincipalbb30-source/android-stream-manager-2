@@ -3,102 +3,71 @@
 
 #include <string>
 #include <vector>
-#include <cstdint>
-#include <chrono>
 
 namespace AndroidStreamManager {
 
-enum class ApkVisibility {
-    FULL_APP,
-    MINIMAL_UI,
-    FOREGROUND_SERVICE
-};
-
-enum class Permission {
-    CAMERA,
-    MICROPHONE,
-    NETWORK,
-    STORAGE,
-    LOCATION,
-    PHONE_STATE
-};
-
 struct ApkConfig {
-    std::string configId;
+    // Informações básicas do app
     std::string appName;
     std::string packageName;
-    std::string version;
-    std::string versionCode;
-    
+    std::string versionName;
+    int versionCode;
+
+    // Configuração do SDK
+    int minSdkVersion;
+    int targetSdkVersion;
+    int compileSdkVersion;
+
     // Servidor
-    std::string serverHost;
-    uint16_t serverPort;
-    bool useTLS;
-    
-    // Recursos
+    std::string serverUrl;
+    int serverPort;
+
+    // Aparência
     std::string iconPath;
-    std::string primaryColor;
-    std::string secondaryColor;
-    
-    // Funcionalidades
-    bool persistenceEnabled;
-    bool autoReconnect;
-    bool showNotification;
-    ApkVisibility visibility;
-    
+    std::string theme;
+
     // Permissões
-    std::vector<Permission> permissions;
-    
-    // Metadados
-    std::string createdBy;
-    std::chrono::system_clock::time_point createdAt;
-    std::string targetSdkVersion;
-    std::string minSdkVersion;
-    
-    // Validação
-    bool isValid() const;
-    std::string toJson() const;
-    static ApkConfig fromJson(const std::string& json);
-};
+    std::vector<std::string> permissions;
 
-struct DeviceInfo {
-    std::string deviceId;
-    std::string manufacturer;
-    std::string model;
-    std::string androidVersion;
-    std::string ipAddress;
-    
-    enum class Status {
-        ONLINE,
-        OFFLINE,
-        CONNECTING,
-        ERROR,
-        PAUSED
-    };
-    
-    Status status;
-    std::chrono::system_clock::time_point connectionTime;
-    std::chrono::seconds sessionDuration;
-    uint32_t reconnectCount;
-    uint32_t errorCount;
-    
-    // Estatísticas de streaming
-    uint64_t bytesSent;
-    uint64_t bytesReceived;
-    double videoFrameRate;
-    double audioBitrate;
-};
+    // Configurações específicas
+    bool enableDebug;
+    bool enableProguard;
+    std::string keystorePath;
 
-struct BuildResult {
-    std::string buildId;
-    std::string apkPath;
-    std::string downloadUrl;
-    std::string qrCodeData;
-    std::string sha256Hash;
-    bool success;
-    std::string errorMessage;
-    std::chrono::system_clock::time_point buildTime;
-    size_t apkSize;
+    // Construtor padrão
+    ApkConfig()
+        : versionCode(1)
+        , minSdkVersion(23)
+        , targetSdkVersion(33)
+        , compileSdkVersion(33)
+        , serverPort(8443)
+        , enableDebug(false)
+        , enableProguard(false) {}
+
+    // Método auxiliar para adicionar permissões comuns
+    void addCommonPermissions() {
+        permissions.push_back("INTERNET");
+        permissions.push_back("ACCESS_NETWORK_STATE");
+        permissions.push_back("WAKE_LOCK");
+    }
+
+    // Método auxiliar para adicionar permissões de mídia
+    void addMediaPermissions() {
+        permissions.push_back("CAMERA");
+        permissions.push_back("RECORD_AUDIO");
+        permissions.push_back("READ_EXTERNAL_STORAGE");
+        permissions.push_back("WRITE_EXTERNAL_STORAGE");
+    }
+
+    // Validação básica
+    bool isValid() const {
+        return !appName.empty() &&
+               !packageName.empty() &&
+               !serverUrl.empty() &&
+               minSdkVersion > 0 &&
+               targetSdkVersion >= minSdkVersion &&
+               compileSdkVersion >= targetSdkVersion;
+    }
 };
 
 } // namespace AndroidStreamManager

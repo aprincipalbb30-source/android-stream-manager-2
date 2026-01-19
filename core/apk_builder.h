@@ -1,40 +1,50 @@
 #ifndef APK_BUILDER_H
 #define APK_BUILDER_H
 
-#include "shared/apk_config.h"
 #include <string>
-#include <memory>
-#include <functional>
+#include <vector>
+#include <chrono>
+#include <shared/apk_config.h>
 
 namespace AndroidStreamManager {
 
-class IApkBuilder {
-public:
-    virtual ~IApkBuilder() = default;
-    
-    virtual BuildResult buildApk(const ApkConfig& config) = 0;
-    virtual bool validateConfig(const ApkConfig& config) = 0;
-    virtual std::string generatePackageName(const std::string& appName) = 0;
-    
-    // Callback para progresso
-    using ProgressCallback = std::function<void(int, const std::string&)>;
-    virtual void setProgressCallback(ProgressCallback callback) = 0;
+struct BuildResult {
+    bool success;
+    std::string apkPath;
+    std::string buildId;
+    std::string sha256Hash;
+    std::string errorMessage;
+    std::chrono::system_clock::time_point buildTime;
 };
 
-class ApkBuilder : public IApkBuilder {
+class ApkBuilder {
 public:
-    explicit ApkBuilder(const std::string& androidSdkPath,
-                       const std::string& templatePath);
-    ~ApkBuilder() override;
-    
-    BuildResult buildApk(const ApkConfig& config) override;
-    bool validateConfig(const ApkConfig& config) override;
-    std::string generatePackageName(const std::string& appName) override;
-    void setProgressCallback(ProgressCallback callback) override;
-    
+    ApkBuilder(const std::string& androidSdkPath, const std::string& templatePath);
+    ~ApkBuilder();
+
+    BuildResult buildApk(const ApkConfig& config);
+
 private:
-    class Impl;
-    std::unique_ptr<Impl> pImpl;
+    bool validateConfig(const ApkConfig& config);
+    std::string generateBuildId();
+    std::string createBuildDirectory(const std::string& buildId);
+    bool copyTemplate(const std::string& buildDir, const ApkConfig& config);
+    bool customizeFiles(const std::string& buildDir, const ApkConfig& config);
+    bool customizeManifest(const std::string& buildDir, const ApkConfig& config);
+    bool customizeBuildGradle(const std::string& buildDir, const ApkConfig& config);
+    bool customizeStrings(const std::string& buildDir, const ApkConfig& config);
+    std::string generatePermissions(const ApkConfig& config);
+    std::string generateServerConfig(const ApkConfig& config);
+    bool compileResources(const std::string& buildDir);
+    bool generateBytecode(const std::string& buildDir);
+    std::string packageApk(const std::string& buildDir, const ApkConfig& config);
+    std::string calculateSha256(const std::string& filePath);
+    void cleanup(const std::string& buildDir);
+    void replaceAll(std::string& str, const std::string& from, const std::string& to);
+
+    std::string androidSdkPath_;
+    std::string templatePath_;
+    uint64_t buildCounter_;
 };
 
 } // namespace AndroidStreamManager

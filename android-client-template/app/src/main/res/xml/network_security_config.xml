@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<network-security-config>
+    <!-- Permitir cleartext traffic apenas para localhost (desenvolvimento) -->
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="false">localhost</domain>
+        <domain includeSubdomains="false">127.0.0.1</domain>
+        <domain includeSubdomains="false">10.0.2.2</domain> <!-- Android emulator -->
+    </domain-config>
+
+    <!-- Configuração para produção - apenas HTTPS -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="true">stream-server.local</domain>
+        <domain includeSubdomains="true">your-domain.com</domain>
+        <!-- Adicionar domínios de produção aqui -->
+    </domain-config>
+
+    <!-- Configuração de pin de certificados (opcional) -->
+    <!--
+    <pin-set>
+        <pin digest="SHA-256">7HIpactkIAq2Y49orFOOQKurWxmmSFZhBCoQYcRhJ3Y=</pin>
+        <pin digest="SHA-256">fwza0LRMXouZHRC8Ei+4FZrXvdQULFVj7y1stIzPjpk=</pin>
+    </pin-set>
+    -->
+
+    <!-- Configuração de backup (fallback para certificados de CA conhecidas) -->
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

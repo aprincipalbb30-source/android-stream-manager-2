@@ -1,0 +1,378 @@
+================================================================================
+            TUTORIAL DE INSTALAÇÃO - ANDROID STREAM MANAGER
+================================================================================
+
+Este tutorial guia a instalação completa do Android Stream Manager no WSL Ubuntu.
+
+🎯 OBJETIVO: Sistema de gerenciamento remoto de dispositivos Android funcional
+
+================================================================================
+PASSO 1: PREPARAÇÃO DO AMBIENTE WSL UBUNTU
+================================================================================
+
+1.1 Verificar versão do Ubuntu no WSL:
+    lsb_release -a
+    # Deve ser Ubuntu 20.04 ou superior
+
+1.2 Atualizar o sistema:
+    sudo apt update && sudo apt upgrade -y
+
+1.3 Instalar ferramentas básicas:
+    sudo apt install -y \
+        git \
+        curl \
+        wget \
+        build-essential \
+        cmake \
+        ninja-build \
+        pkg-config \
+        software-properties-common \
+        apt-transport-https \
+        ca-certificates \
+        gnupg \
+        lsb-release
+
+================================================================================
+PASSO 2: INSTALAÇÃO DAS DEPENDÊNCIAS DO SISTEMA
+================================================================================
+
+2.1 Bibliotecas essenciais:
+    sudo apt install -y \
+        libssl-dev \
+        zlib1g-dev \
+        liblz4-dev \
+        libzip-dev \
+        libjwt-dev \
+        uuid-dev
+
+2.2 Qt6 para o Dashboard (interface gráfica):
+    sudo apt install -y \
+        qt6-base-dev \
+        qt6-tools-dev \
+        qt6-multimedia-dev \
+        qt6-declarative-dev
+
+2.3 Ferramentas de desenvolvimento:
+    sudo apt install -y \
+        clang \
+        clang-format \
+        clang-tidy \
+        valgrind \
+        gdb \
+        doxygen \
+        graphviz
+
+2.4 Verificar se as dependências foram instaladas:
+    pkg-config --list-all | grep -E "(ssl|zlib|lz4|zip|jwt|qt6)"
+
+================================================================================
+PASSO 3: CLONAR E PREPARAR O PROJETO
+================================================================================
+
+3.1 Clonar o repositório:
+    git clone https://github.com/seu-usuario/android-stream-manager.git
+    cd android-stream-manager
+
+3.2 Verificar estrutura do projeto:
+    ls -la
+    # Deve conter: core/, security/, optimization/, android-client-template/, etc.
+
+3.3 Dar permissões de execução aos scripts:
+    chmod +x scripts/*.sh
+    chmod +x tutorial-install-linux.sh
+
+================================================================================
+PASSO 4: BUILD BÁSICO (TESTE RÁPIDO)
+================================================================================
+
+4.1 Build da biblioteca core (teste rápido):
+    make build
+
+    # Saída esperada:
+    # Compilando core/system_manager.cpp...
+    # Compilando core/apk_builder.cpp...
+    # Compilando optimization/stream_optimizer.cpp...
+    # Criando biblioteca core...
+    # ar: creating lib/libcore.a
+
+4.2 Verificar se o build foi bem-sucedido:
+    ls -la lib/
+    # Deve conter: libcore.a
+
+4.3 Executar teste básico:
+    make test
+
+    # Saída esperada:
+    # === Testes do Android Stream Manager ===
+    # === Teste ThreadPool ===
+    # === Teste StreamOptimizer ===
+    # === Teste BuildCache ===
+    # === Todos os testes concluídos ===
+
+================================================================================
+PASSO 5: BUILD COMPLETO COM CMAKE
+================================================================================
+
+5.1 Criar diretório de build:
+    mkdir -p build
+    cd build
+
+5.2 Configurar com CMake:
+    cmake .. \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DBUILD_DASHBOARD=ON \
+        -DBUILD_APK_BUILDER=ON \
+        -DBUILD_TESTS=OFF
+
+5.3 Compilar:
+    make -j$(nproc)
+
+5.4 Verificar executáveis gerados:
+    ls -la bin/
+    # Deve conter:
+    # android_stream_dashboard (se Qt6 instalado)
+    # apk_builder
+
+================================================================================
+PASSO 6: CONFIGURAÇÃO DO ANDROID SDK (OPCIONAL - PARA BUILD DE APKS)
+================================================================================
+
+6.1 Criar diretório do Android SDK:
+    mkdir -p ~/android-sdk
+    cd ~/android-sdk
+
+6.2 Baixar Command Line Tools:
+    wget https://dl.google.com/android/repository/commandlinetools-linux-9477386_latest.zip
+
+6.3 Extrair e configurar:
+    unzip commandlinetools-linux-9477386_latest.zip
+    mkdir -p cmdline-tools
+    mv cmdline-tools/* cmdline-tools/
+    rm commandlinetools-linux-9477386_latest.zip
+
+6.4 Configurar variáveis de ambiente:
+    echo 'export ANDROID_SDK_ROOT="$HOME/android-sdk"' >> ~/.bashrc
+    echo 'export ANDROID_HOME="$ANDROID_SDK_ROOT"' >> ~/.bashrc
+    echo 'export PATH="$PATH:$ANDROID_SDK_ROOT/cmdline-tools/bin:$ANDROID_SDK_ROOT/platform-tools"' >> ~/.bashrc
+    source ~/.bashrc
+
+6.5 Instalar componentes do Android:
+    cd ~/android-sdk
+    sdkmanager --install "platform-tools"
+    sdkmanager --install "platforms;android-33"
+    sdkmanager --install "build-tools;33.0.0"
+    sdkmanager --install "ndk;25.2.9519653"
+    sdkmanager --install "cmake;3.22.1"
+
+6.6 Verificar instalação:
+    adb version
+    # Deve mostrar versão do ADB
+
+================================================================================
+PASSO 7: CONFIGURAÇÃO DO SISTEMA
+================================================================================
+
+7.1 Copiar arquivos de configuração:
+    sudo mkdir -p /etc/android-stream-manager
+    sudo cp config/system_config.json /etc/android-stream-manager/
+
+7.2 Criar diretórios necessários:
+    sudo mkdir -p \
+        /var/lib/android-stream-manager/{apks,cache,sessions} \
+        /var/log/android-stream-manager \
+        /usr/local/share/android-stream-manager/templates
+
+7.3 Copiar templates (se existirem):
+    sudo cp -r templates/* /usr/local/share/android-stream-manager/templates/ 2>/dev/null || true
+
+================================================================================
+PASSO 8: INSTALAÇÃO DO SISTEMA (OPCIONAL)
+================================================================================
+
+8.1 Instalar biblioteca core:
+    sudo make install
+
+8.2 Verificar instalação:
+    ls -la /usr/local/lib/libcore.a
+    ls -la /usr/local/include/android-stream-manager/
+
+================================================================================
+PASSO 9: BUILD DO APK ANDROID
+================================================================================
+
+9.1 Entrar no diretório do template:
+    cd android-client-template
+
+9.2 Verificar se tem Android SDK configurado:
+    echo $ANDROID_SDK_ROOT
+    # Deve apontar para ~/android-sdk
+
+9.3 Build do APK (modo debug):
+    ./gradlew assembleDebug
+
+9.4 Verificar APK gerado:
+    ls -la app/build/outputs/apk/debug/
+    # Deve conter: app-debug.apk
+
+================================================================================
+PASSO 10: TESTE INTEGRADO DO SISTEMA
+================================================================================
+
+10.1 Executar dashboard (se Qt6 instalado):
+     cd build/bin
+     ./android_stream_dashboard
+
+10.2 Testar APK builder:
+     cd build/bin
+     ./apk_builder --help
+
+10.3 Verificar conectividade de rede:
+     nc -zv localhost 8443 2>/dev/null || echo "Porta 8443 fechada (normal)"
+
+================================================================================
+PASSO 11: INSTALAÇÃO DO APK NO DISPOSITIVO ANDROID
+================================================================================
+
+11.1 Conectar dispositivo Android via USB:
+     adb devices
+     # Deve mostrar dispositivo conectado
+
+11.2 Instalar APK:
+     adb install -r android-client-template/app/build/outputs/apk/debug/app-debug.apk
+
+11.3 Conceder permissões (no dispositivo):
+     # Abra o app e conceda todas as permissões solicitadas
+
+================================================================================
+PROBLEMAS COMUNS E SOLUÇÕES
+================================================================================
+
+PROBLEMA 1: "lz4 library not found"
+SOLUÇÃO:
+    sudo apt install liblz4-dev
+
+PROBLEMA 2: "Qt6 not found"
+SOLUÇÃO:
+    sudo apt install qt6-base-dev qt6-tools-dev qt6-multimedia-dev
+
+PROBLEMA 3: "Android SDK not found"
+SOLUÇÃO:
+    Verificar se ANDROID_SDK_ROOT está configurado
+    source ~/.bashrc
+
+PROBLEMA 4: "Build falha com erros de SSL"
+SOLUÇÃO:
+    sudo apt install libssl-dev
+    Verificar versão: pkg-config --modversion libssl
+
+PROBLEMA 5: "CMake não encontra bibliotecas"
+SOLUÇÃO:
+    pkg-config --libs --cflags libssl lz4 libzip
+    # Deve mostrar flags de compilação
+
+PROBLEMA 6: "Qt6 interface não abre no WSL"
+SOLUÇÃO:
+    export DISPLAY=:0
+    # Ou usar X11 forwarding se configurar X server no Windows
+
+================================================================================
+VERIFICAÇÃO FINAL DO SISTEMA
+================================================================================
+
+Script de verificação completa:
+    #!/bin/bash
+    echo "=== Verificação do Android Stream Manager ==="
+
+    # Verificar dependências
+    echo "Dependências:"
+    pkg-config --exists libssl && echo "✓ OpenSSL" || echo "✗ OpenSSL"
+    pkg-config --exists liblz4 && echo "✓ LZ4" || echo "✗ LZ4"
+    pkg-config --exists libzip && echo "✓ libzip" || echo "✗ libzip"
+    pkg-config --exists Qt6Core && echo "✓ Qt6" || echo "✗ Qt6"
+
+    # Verificar build
+    echo -e "\nBuild:"
+    [ -f "lib/libcore.a" ] && echo "✓ Biblioteca core" || echo "✗ Biblioteca core"
+    [ -f "build/bin/android_stream_dashboard" ] && echo "✓ Dashboard" || echo "✗ Dashboard"
+    [ -f "android-client-template/app/build/outputs/apk/debug/app-debug.apk" ] && echo "✓ APK Android" || echo "✗ APK Android"
+
+    # Verificar Android SDK
+    echo -e "\nAndroid SDK:"
+    [ -n "$ANDROID_SDK_ROOT" ] && echo "✓ ANDROID_SDK_ROOT configurado" || echo "✗ ANDROID_SDK_ROOT não configurado"
+    [ -d "$ANDROID_SDK_ROOT/platform-tools" ] && echo "✓ Platform tools instalado" || echo "✗ Platform tools faltando"
+
+    echo -e "\n=== Verificação concluída ==="
+
+================================================================================
+COMANDOS ÚTEIS PARA DESENVOLVIMENTO
+================================================================================
+
+# Build rápido
+make build && make test
+
+# Build completo
+cd build && make -j$(nproc)
+
+# Limpar tudo
+make clean
+
+# Formatar código
+make format
+
+# Análise estática
+make lint
+
+# Status do projeto
+make status
+
+# Contar linhas de código
+make count
+
+================================================================================
+ESTRUTURA FINAL ESPERADA
+================================================================================
+
+android-stream-manager/
+├── bin/
+│   ├── android_stream_dashboard    # Interface Qt
+│   └── apk_builder                # Construtor de APKs
+├── lib/
+│   └── libcore.a                  # Biblioteca core
+├── android-client-template/
+│   └── app/build/outputs/apk/debug/app-debug.apk
+├── config/
+│   └── system_config.json
+├── /etc/android-stream-manager/
+│   └── system_config.json
+└── /usr/local/include/android-stream-manager/
+    └── *.h                        # Headers C++
+
+================================================================================
+PRÓXIMOS PASSOS APÓS INSTALAÇÃO
+================================================================================
+
+1. Configurar servidor de produção
+2. Implementar autenticação JWT
+3. Configurar TLS/SSL
+4. Implementar dashboard web (opcional)
+5. Adicionar monitoramento
+6. Configurar backup automático
+7. Documentar APIs
+
+================================================================================
+SUPORTE E DOCUMENTAÇÃO
+================================================================================
+
+- Documentação: docs/ (quando implementada)
+- Logs: /var/log/android-stream-manager/
+- Configurações: /etc/android-stream-manager/
+- Código fonte: src/, android-client-template/
+
+Para suporte adicional, consulte:
+- README.md (quando criado)
+- Issues do GitHub
+- Documentação técnica nos arquivos .h
+
+================================================================================
+FIM DO TUTORIAL - SISTEMA PRONTO PARA USO!
+================================================================================

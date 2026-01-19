@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Android Stream Manager</string>
+    <string name="service_name">Stream Manager Service</string>
+    <string name="service_description">Serviço de streaming em background</string>
+
+    <!-- Status messages -->
+    <string name="status_initializing">Inicializando...</string>
+    <string name="status_connecting">Conectando ao servidor...</string>
+    <string name="status_connected">Conectado</string>
+    <string name="status_disconnected">Desconectado</string>
+    <string name="status_streaming">Streaming ativo</string>
+    <string name="status_error">Erro</string>
+
+    <!-- Button labels -->
+    <string name="button_reconnect">Reconectar</string>
+    <string name="button_test">Testar</string>
+
+    <!-- Permissions -->
+    <string name="permission_camera_title">Acesso à Câmera</string>
+    <string name="permission_camera_message">Este aplicativo precisa de acesso à câmera para capturar tela</string>
+    <string name="permission_microphone_title">Acesso ao Microfone</string>
+    <string name="permission_microphone_message">Este aplicativo precisa de acesso ao microfone para capturar áudio</string>
+    <string name="permission_storage_title">Acesso ao Armazenamento</string>
+    <string name="permission_storage_message">Este aplicativo precisa de acesso ao armazenamento para cache temporário</string>
+
+    <!-- Error messages -->
+    <string name="error_connection_failed">Falha na conexão</string>
+    <string name="error_permissions_denied">Permissões necessárias não concedidas</string>
+    <string name="error_service_unavailable">Serviço indisponível</string>
+    <string name="error_unknown">Erro desconhecido</string>
+
+    <!-- Configuration -->
+    <string name="config_server_url">wss://stream-server.local:8443/ws</string>
+    <string name="config_connection_timeout">30000</string>
+    <string name="config_reconnect_delay">5000</string>
+    <string name="config_heartbeat_interval">30000</string>
+</resources>

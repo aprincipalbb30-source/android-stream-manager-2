@@ -1,4 +1,5 @@
-🚀 Passo 1: Preparação do Ambiente
+
+,🚀 Passo 1: Preparação do Ambiente
 1.1. No Ubuntu/Linux:
 bash
 # Atualizar sistema
