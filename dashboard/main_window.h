@@ -21,6 +21,8 @@ class QProgressBar;
 class QTableWidget;
 QT_END_NAMESPACE
 
+class MonitoringWidget;
+
 namespace AndroidStreamManager {
 
 class MainWindow : public QMainWindow {
@@ -38,7 +40,12 @@ private slots:
     void onTerminateSessionClicked();
     void onDeviceSelectionChanged();
     void onUpdateStatistics();
-    
+
+    // Monitoramento
+    void showMonitoringDashboard();
+    void refreshMonitoringData();
+    void onAlertReceived(const QString& message, const QString& severity);
+
     // Configuração APK
     void onSelectIconClicked();
     void onPermissionToggled();
@@ -68,6 +75,7 @@ private:
     QStackedWidget *mainStack;
     QListWidget *deviceList;
     QTableWidget *buildHistoryTable;
+    MonitoringWidget *monitoringWidget;
     QTextEdit *eventLog;
     QLabel *statusLabel;
     QProgressBar *buildProgress;

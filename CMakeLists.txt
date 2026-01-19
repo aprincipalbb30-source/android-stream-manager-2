@@ -122,11 +122,20 @@ add_library(server_lib STATIC
     server/http_server.cpp
 )
 
+# Biblioteca Monitoring
+add_library(monitoring_lib STATIC
+    monitoring/metrics_collector.cpp
+    monitoring/alerts_manager.cpp
+    monitoring/health_checker.cpp
+    monitoring/prometheus_exporter.cpp
+)
+
 target_link_libraries(core_lib
     database_lib
     optimization_lib
     security_lib
     compliance_lib
+    monitoring_lib
     OpenSSL::Crypto
     ${LIBZIP_LIBRARY}
     ${ZLIB_LIBRARIES}
@@ -147,6 +156,7 @@ if(BUILD_DASHBOARD)
             dashboard/main.cpp
             dashboard/main_window.cpp
             dashboard/apk_config_widget.cpp
+            dashboard/monitoring_widget.cpp
             dashboard/resources.qrc
         )
 

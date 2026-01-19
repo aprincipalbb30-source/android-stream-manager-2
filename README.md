@@ -55,6 +55,38 @@ android-stream-manager/
 └── config/                 # Configurações do sistema
 ```
 
+## 📊 Sistema de Monitoramento
+
+### Métricas em Tempo Real
+- **Sistema**: CPU, memória, disco, rede
+- **Dispositivos**: Status, bateria, conexões
+- **Streaming**: Latência, bitrate, qualidade
+- **Aplicação**: Requests, erros, performance
+
+### Alertas Inteligentes
+- Alertas automáticos configuráveis
+- Severidades: LOW, MEDIUM, HIGH, CRITICAL
+- Cooldown e reconhecimento de alertas
+- Notificações em tempo real
+
+### Health Checks
+- Verificações automatizadas de saúde
+- Status consolidado do sistema
+- Diagnóstico de problemas
+- Relatórios detalhados
+
+### Exportação Prometheus
+- Endpoint `/metrics` compatível
+- Integração com Grafana/AlertManager
+- Métricas customizáveis
+- Scraping automático
+
+### Dashboard de Monitoramento
+- Interface Qt em tempo real
+- Gráficos e métricas visuais
+- Gerenciamento de alertas
+- Logs consolidados
+
 ## 🚀 Instalação Rápida
 
 ### Pré-requisitos

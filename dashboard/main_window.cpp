@@ -1,4 +1,5 @@
 #include "main_window.h"
+#include "monitoring_widget.h"
 #include <QVBoxLayout>
 #include <QHBoxLayout>
 #include <QGridLayout>
@@ -168,6 +169,19 @@ void MainWindow::setupMenuBar() {
 
     QAction* clearLogsAction = toolsMenu->addAction("&Limpar Logs");
     clearLogsAction->setStatusTip("Limpar logs do sistema");
+
+    // Menu Monitoramento
+    QMenu* monitoringMenu = menuBar->addMenu("&Monitoramento");
+
+    QAction* monitoringDashboardAction = monitoringMenu->addAction("&Dashboard de Monitoramento");
+    monitoringDashboardAction->setShortcut(QKeySequence("Ctrl+M"));
+    monitoringDashboardAction->setStatusTip("Abrir dashboard de monitoramento");
+    connect(monitoringDashboardAction, &QAction::triggered, this, &MainWindow::showMonitoringDashboard);
+
+    QAction* refreshMonitoringAction = monitoringMenu->addAction("&Atualizar Métricas");
+    refreshMonitoringAction->setShortcut(QKeySequence("F12"));
+    refreshMonitoringAction->setStatusTip("Atualizar todas as métricas");
+    connect(refreshMonitoringAction, &QAction::triggered, this, &MainWindow::refreshMonitoringData);
 
     // Menu Ajuda
     QMenu* helpMenu = menuBar->addMenu("Aj&uda");
@@ -461,6 +475,44 @@ void MainWindow::setupStatusBar() {
 
 void MainWindow::setupConnections() {
     // Conexões já foram feitas nos métodos setup*
+}
+
+// ========== MONITORAMENTO ==========
+
+void MainWindow::showMonitoringDashboard() {
+    // Criar widget de monitoramento se não existir
+    if (!monitoringWidget) {
+        monitoringWidget = new MonitoringWidget(this);
+        monitoringWidget->setWindowTitle("Dashboard de Monitoramento - Android Stream Manager");
+        monitoringWidget->resize(1000, 700);
+
+        // Conectar sinais
+        connect(monitoringWidget, &MonitoringWidget::alertTriggered,
+                this, &MainWindow::onAlertReceived);
+    }
+
+    monitoringWidget->startMonitoring();
+    monitoringWidget->show();
+    monitoringWidget->activateWindow();
+}
+
+void MainWindow::refreshMonitoringData() {
+    if (monitoringWidget) {
+        monitoringWidget->refreshData();
+    }
+
+    showEventLog("Sistema", "Dados de monitoramento atualizados");
+}
+
+void MainWindow::onAlertReceived(const QString& message, const QString& severity) {
+    // Mostrar alerta no log principal
+    showEventLog("ALERTA", QString("%1: %2").arg(severity).arg(message).toStdString());
+
+    // Mostrar notificação se for crítica
+    if (severity == "CRITICAL" || severity == "HIGH") {
+        QMessageBox::warning(this, "Alerta do Sistema",
+                           QString("🚨 %1\n\n%2").arg(severity).arg(message));
+    }
 }
 
 void MainWindow::updateDeviceList() {

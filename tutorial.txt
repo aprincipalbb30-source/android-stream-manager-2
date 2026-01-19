@@ -403,10 +403,100 @@ SUPORTE E DOCUMENTAÇÃO
 - Configurações: /etc/android-stream-manager/
 - Código fonte: src/, android-client-template/
 
+================================================================================
+PASSO 8: SISTEMA DE MONITORAMENTO E MÉTRICAS
+================================================================================
+
+8.1 Visão Geral do Sistema de Monitoramento:
+O Android Stream Manager inclui um sistema completo de monitoramento com:
+
+📊 MÉTRICAS COLETADAS:
+- CPU, Memória, Disco, Rede do sistema
+- Status e bateria dos dispositivos
+- Streams ativos, latência, bitrate
+- Taxa de erro, conexões ativas
+- Cache hits/misses, queries do banco
+
+🚨 SISTEMA DE ALERTAS:
+- Alertas automáticos por email/Telegram
+- Severidades: LOW, MEDIUM, HIGH, CRITICAL
+- Cooldown configurável entre alertas
+- Reconhecimento e resolução de alertas
+
+🔍 VERIFICAÇÃO DE SAÚDE:
+- Health checks automáticos
+- Status: HEALTHY, DEGRADED, UNHEALTHY
+- Verificações: sistema, banco, rede, dispositivos
+- Dashboard em tempo real
+
+📈 EXPORTAÇÃO PROMETHEUS:
+- Endpoint HTTP /metrics no formato Prometheus
+- Compatível com Grafana, AlertManager
+- Métricas customizáveis
+
+8.2 Usando o Dashboard de Monitoramento:
+
+No Dashboard Qt (interface gráfica):
+- Menu Monitoramento → Dashboard de Monitoramento
+- Ctrl+M para abrir rapidamente
+- F12 para atualizar métricas
+
+Funcionalidades disponíveis:
+- Métricas em tempo real (CPU, memória, disco)
+- Gráfico histórico de CPU (últimos 2 minutos)
+- Lista de dispositivos conectados
+- Status de streaming ativo
+- Tabela de alertas ativos
+- Status de saúde do sistema
+- Logs em tempo real
+
+8.3 Endpoint Prometheus:
+
+O servidor expõe métricas no formato Prometheus:
+- URL: http://localhost:9090/metrics
+- Compatível com scraping automático
+- Métricas incluem labels para dispositivos
+
+Exemplo de uso com Prometheus:
+```yaml
+scrape_configs:
+  - job_name: 'android_stream_manager'
+    static_configs:
+      - targets: ['localhost:9090']
+```
+
+8.4 Configuração de Alertas:
+
+Alertas padrão configurados:
+- CPU > 90% (HIGH)
+- Memória > 85% (HIGH)
+- Disco > 90% usado (MEDIUM)
+- Dispositivo desconectado (HIGH)
+- Bateria < 20% (MEDIUM)
+- Latência > 100ms (MEDIUM)
+- Taxa erro > 5% (HIGH)
+
+Para modificar alertas, editar o código em:
+- monitoring/alerts_manager.cpp
+- Método: setupDefaultAlertRules()
+
+8.5 Monitoramento Avançado:
+
+Para integração com sistemas externos:
+- Webhooks para alertas
+- API REST para métricas
+- Logs estruturados
+- Métricas customizadas via API
+
+================================================================================
+PASSO 9: VERIFICAÇÃO FINAL E SUPORTE
+================================================================================
+
 Para suporte adicional, consulte:
 - README.md (quando criado)
 - Issues do GitHub
 - Documentação técnica nos arquivos .h
+- Dashboard de Monitoramento (Monitoramento → Dashboard)
 
 ================================================================================
 FIM DO TUTORIAL - SISTEMA PRONTO PARA USO!

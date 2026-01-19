@@ -44,7 +44,35 @@ bool SystemManager::initialize(const std::string& configPath) {
             throw std::runtime_error("Falha ao inicializar banco de dados");
         }
 
-        // 5. Iniciar manutenção periódica
+        // 5. Inicializar monitoramento
+        if (!metricsCollector.initialize()) {
+            throw std::runtime_error("Falha ao inicializar coletor de métricas");
+        }
+
+        if (!alertsManager.initialize()) {
+            throw std::runtime_error("Falha ao inicializar gerenciador de alertas");
+        }
+
+        if (!healthChecker.initialize()) {
+            throw std::runtime_error("Falha ao inicializar verificador de saúde");
+        }
+
+        if (!prometheusExporter.initialize(9090)) {
+            throw std::runtime_error("Falha ao inicializar exportador Prometheus");
+        }
+
+        // Configurar callbacks de alertas
+        alertsManager.setAlertTriggeredCallback([](const ActiveAlert& alert) {
+            std::cout << "🚨 ALERTA: [" << AlertsManager::getInstance().getStatusDescription(alert.severity)
+                      << "] " << alert.message << std::endl;
+        });
+
+        // Iniciar exportador Prometheus
+        if (!prometheusExporter.start()) {
+            std::cout << "Aviso: Não foi possível iniciar exportador Prometheus" << std::endl;
+        }
+
+        // 6. Iniciar manutenção periódica
         threadPool.enqueue([this]() {
             while (initialized) {
                 std::this_thread::sleep_for(std::chrono::minutes(5));
@@ -53,6 +81,27 @@ bool SystemManager::initialize(const std::string& configPath) {
 
                 // Limpeza periódica do database (registros antigos)
                 DatabaseManager::getInstance().cleanupOldRecords(30); // 30 dias
+
+                // Coletar métricas do sistema
+                metricsCollector.collectSystemMetrics();
+
+                // Verificar alertas
+                alertsManager.checkAllAlerts();
+
+                // Verificar saúde do sistema
+                healthChecker.performHealthCheck();
+            }
+        });
+
+        // 7. Iniciar coleta de métricas de dispositivos (mais frequente)
+        threadPool.enqueue([this]() {
+            while (initialized) {
+                std::this_thread::sleep_for(std::chrono::seconds(30));
+
+                // Coletar métricas de dispositivos e aplicação
+                metricsCollector.collectDeviceMetrics();
+                metricsCollector.collectStreamingMetrics();
+                metricsCollector.collectApplicationMetrics();
             }
         });
         

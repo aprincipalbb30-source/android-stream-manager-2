@@ -9,6 +9,10 @@
 #include "optimization/build_cache.h"
 #include "optimization/stream_optimizer.h"
 #include "database/database_manager.h"
+#include "monitoring/metrics_collector.h"
+#include "monitoring/alerts_manager.h"
+#include "monitoring/health_checker.h"
+#include "monitoring/prometheus_exporter.h"
 
 namespace AndroidStreamManager {
 
@@ -61,6 +65,12 @@ private:
     ThreadPool threadPool;
     BuildCache buildCache;
     StreamOptimizer streamOptimizer;
+
+    // Monitoramento
+    MetricsCollector metricsCollector;
+    AlertsManager alertsManager;
+    HealthChecker healthChecker;
+    PrometheusExporter prometheusExporter;
     
     // Estado do sistema
     std::atomic<bool> initialized{false};
