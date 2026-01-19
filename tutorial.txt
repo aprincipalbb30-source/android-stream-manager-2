@@ -450,6 +450,26 @@ Funcionalidades disponíveis:
 - Status de saúde do sistema
 - Logs em tempo real
 
+8.3 Mini-Emulador de Streaming (estilo MemuPlay):
+
+Interface visual similar ao MemuPlay com controles laterais:
+- Menu Streaming → Visualizador de Streaming
+- Ctrl+S para abrir rapidamente
+- Selecione um dispositivo antes de abrir
+
+Controles virtuais disponíveis:
+- 🔄 Voltar, 🏠 Home, ☰ Menu (linha superior)
+- 🔉 Volume-, ⏻ Power, 🔊 Volume+ (linha central)
+- 🔄 Rotacionar, 📸 Screenshot, ⚙️ Config (linha inferior)
+
+Funcionalidades do emulador:
+- Toque na tela com feedback visual
+- Eventos de teclado mapeados
+- Rotação Portrait/Landscape
+- Moldura realista de dispositivo Android
+- Status de conexão em tempo real
+- Qualidade de streaming ajustável
+
 8.3 Endpoint Prometheus:
 
 O servidor expõe métricas no formato Prometheus:

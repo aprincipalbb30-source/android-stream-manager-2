@@ -22,6 +22,7 @@ class QTableWidget;
 QT_END_NAMESPACE
 
 class MonitoringWidget;
+class StreamingViewer;
 
 namespace AndroidStreamManager {
 
@@ -45,6 +46,12 @@ private slots:
     void showMonitoringDashboard();
     void refreshMonitoringData();
     void onAlertReceived(const QString& message, const QString& severity);
+
+    // Streaming Viewer
+    void showStreamingViewer();
+    void onStreamingStarted(const QString& deviceId);
+    void onStreamingStopped(const QString& deviceId);
+    void onStreamingError(const QString& error);
 
     // Configuração APK
     void onSelectIconClicked();
@@ -76,6 +83,7 @@ private:
     QListWidget *deviceList;
     QTableWidget *buildHistoryTable;
     MonitoringWidget *monitoringWidget;
+    StreamingViewer *streamingViewer;
     QTextEdit *eventLog;
     QLabel *statusLabel;
     QProgressBar *buildProgress;

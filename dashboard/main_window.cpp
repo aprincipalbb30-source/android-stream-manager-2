@@ -183,6 +183,24 @@ void MainWindow::setupMenuBar() {
     refreshMonitoringAction->setStatusTip("Atualizar todas as métricas");
     connect(refreshMonitoringAction, &QAction::triggered, this, &MainWindow::refreshMonitoringData);
 
+    // Menu Streaming
+    QMenu* streamingMenu = menuBar->addMenu("&Streaming");
+
+    QAction* streamingViewerAction = streamingMenu->addAction("&Visualizador de Streaming");
+    streamingViewerAction->setShortcut(QKeySequence("Ctrl+S"));
+    streamingViewerAction->setStatusTip("Abrir mini-emulador para visualização de streaming");
+    connect(streamingViewerAction, &QAction::triggered, this, &MainWindow::showStreamingViewer);
+
+    QAction* startStreamAction = streamingMenu->addAction("&Iniciar Streaming");
+    startStreamAction->setShortcut(QKeySequence("Ctrl+Shift+S"));
+    startStreamAction->setStatusTip("Iniciar streaming do dispositivo selecionado");
+    connect(startStreamAction, &QAction::triggered, this, &MainWindow::onStartStreamClicked);
+
+    QAction* stopStreamAction = streamingMenu->addAction("&Parar Streaming");
+    stopStreamAction->setShortcut(QKeySequence("Ctrl+Shift+X"));
+    stopStreamAction->setStatusTip("Parar streaming atual");
+    connect(stopStreamAction, &QAction::triggered, this, &MainWindow::onPauseStreamClicked);
+
     // Menu Ajuda
     QMenu* helpMenu = menuBar->addMenu("Aj&uda");
 
@@ -853,6 +871,55 @@ void MainWindow::closeEvent(QCloseEvent *event) {
     } else {
         event->ignore();
     }
+}
+
+// ========== STREAMING VIEWER ==========
+
+void MainWindow::showStreamingViewer() {
+    // Criar visualizador de streaming se não existir
+    if (!streamingViewer) {
+        streamingViewer = new StreamingViewer(this);
+        streamingViewer->setWindowTitle("Mini Android Emulator - Android Stream Manager");
+        streamingViewer->resize(1000, 700);
+
+        // Conectar sinais
+        connect(streamingViewer, &StreamingViewer::streamingStarted,
+                this, &MainWindow::onStreamingStarted);
+        connect(streamingViewer, &StreamingViewer::streamingStopped,
+                this, &MainWindow::onStreamingStopped);
+        connect(streamingViewer, &StreamingViewer::errorOccurred,
+                this, &MainWindow::onStreamingError);
+    }
+
+    // Obter dispositivo selecionado
+    QListWidgetItem* selectedItem = deviceList->currentItem();
+    if (selectedItem) {
+        QString deviceId = selectedItem->text().split(" - ").first();
+        QString deviceName = selectedItem->text();
+
+        streamingViewer->setDeviceInfo(deviceId, deviceName);
+        streamingViewer->startStreaming(deviceId);
+    } else {
+        QMessageBox::information(this, "Selecionar Dispositivo",
+                               "Por favor, selecione um dispositivo na lista antes de abrir o visualizador de streaming.");
+        return;
+    }
+
+    streamingViewer->show();
+    streamingViewer->activateWindow();
+}
+
+void MainWindow::onStreamingStarted(const QString& deviceId) {
+    showEventLog("STREAMING", "Streaming iniciado para dispositivo: " + deviceId.toStdString());
+}
+
+void MainWindow::onStreamingStopped(const QString& deviceId) {
+    showEventLog("STREAMING", "Streaming parado para dispositivo: " + deviceId.toStdString());
+}
+
+void MainWindow::onStreamingError(const QString& error) {
+    showEventLog("STREAMING", "Erro no streaming: " + error.toStdString());
+    QMessageBox::warning(this, "Erro no Streaming", error);
 }
 
 void MainWindow::showEvent(QShowEvent *event) {

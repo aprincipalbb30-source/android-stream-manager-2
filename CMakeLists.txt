@@ -157,6 +157,7 @@ if(BUILD_DASHBOARD)
             dashboard/main_window.cpp
             dashboard/apk_config_widget.cpp
             dashboard/monitoring_widget.cpp
+            dashboard/streaming_viewer.cpp
             dashboard/resources.qrc
         )
 
