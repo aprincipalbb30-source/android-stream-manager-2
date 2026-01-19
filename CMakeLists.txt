@@ -34,6 +34,15 @@ if(NOT SQLite3_FOUND)
     message(FATAL_ERROR "SQLite3 not found - database features are required")
 endif()
 
+# Biblioteca JSON nlohmann (header-only)
+include(FetchContent)
+FetchContent_Declare(
+    nlohmann_json
+    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp
+    DOWNLOAD_NO_EXTRACT TRUE
+)
+FetchContent_MakeAvailable(nlohmann_json)
+
 # LZ4 (tentar encontrar)
 find_library(LZ4_LIBRARY NAMES lz4 liblz4)
 if(NOT LZ4_LIBRARY)

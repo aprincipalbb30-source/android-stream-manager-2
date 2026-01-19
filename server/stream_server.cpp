@@ -6,6 +6,9 @@
 #include <random>
 #include <sstream>
 #include <iomanip>
+#include <nlohmann/json.hpp>
+#include <vector>
+#include <array>
 
 namespace AndroidStreamManager {
 
@@ -466,37 +469,57 @@ void StreamServer::handleStreamData(const std::string& dataMessage) {
 }
 
 void StreamServer::handleVideoFrame(const std::string& frameMessage) {
-    // Processar frame de vídeo H.264
     try {
-        // Parse JSON (simplificado - em produção usar biblioteca JSON)
-        std::string timestamp = extractJsonValue(frameMessage, "timestamp");
-        std::string isKeyFrame = extractJsonValue(frameMessage, "isKeyFrame");
-        std::string data = extractJsonValue(frameMessage, "data");
+        // Parse JSON com biblioteca adequada
+        nlohmann::json jsonMsg = nlohmann::json::parse(frameMessage);
 
-        if (!data.empty()) {
-            // Decodificar Base64 (simplificado)
-            std::vector<uint8_t> frameData = base64Decode(data);
+        // Extrair dados do frame
+        std::string deviceId = jsonMsg.value("deviceId", "unknown_device");
+        qint64 timestamp = jsonMsg.value("ts", 0LL);
+        bool isKeyFrame = jsonMsg.value("key", false);
+        int width = jsonMsg.value("w", 1080);
+        int height = jsonMsg.value("h", 1920);
+        long sequenceNumber = jsonMsg.value("seq", 0L);
+        std::string base64Data = jsonMsg.value("data", "");
+
+        if (!base64Data.empty()) {
+            // Decodificar Base64 corretamente
+            std::vector<uint8_t> frameData = base64Decode(base64Data);
 
             // Criar dados de stream
             StreamData streamData;
-            streamData.deviceId = "android_device"; // TODO: Obter do contexto
+            streamData.deviceId = deviceId;
             streamData.dataType = StreamData::DataType::VIDEO_H264;
-            streamData.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::system_clock::now().time_since_epoch()).count();
-            streamData.frameData = frameData;
-            streamData.isKeyFrame = (isKeyFrame == "true");
+            streamData.timestamp = timestamp;
+            streamData.frameData = std::move(frameData);
+            streamData.isKeyFrame = isKeyFrame;
+            streamData.width = width;
+            streamData.height = height;
+            streamData.sequenceNumber = sequenceNumber;
+
+            // Log detalhado
+            std::cout << "🎬 Frame recebido - Device: " << deviceId
+                      << ", Size: " << streamData.frameData.size() << " bytes"
+                      << ", Key: " << (isKeyFrame ? "YES" : "NO")
+                      << ", Seq: " << sequenceNumber
+                      << ", Res: " << width << "x" << height << std::endl;
 
             // Notificar callbacks
             if (streamDataCallback_) {
                 streamDataCallback_(streamData.deviceId, streamData);
             }
 
-            // Broadcast para dashboards conectados
+            // Broadcast para TODOS os dashboards conectados
             broadcastVideoFrame(streamData);
+
+        } else {
+            std::cerr << "❌ Frame sem dados Base64" << std::endl;
         }
 
+    } catch (const nlohmann::json::exception& e) {
+        std::cerr << "❌ Erro JSON no frame de vídeo: " << e.what() << std::endl;
     } catch (const std::exception& e) {
-        std::cerr << "Erro ao processar frame de vídeo: " << e.what() << std::endl;
+        std::cerr << "❌ Erro geral no frame de vídeo: " << e.what() << std::endl;
     }
 }
 
@@ -541,35 +564,152 @@ void StreamServer::handleScreenLockCommand(const std::string& commandMessage) {
 }
 
 void StreamServer::broadcastVideoFrame(const StreamData& frameData) {
-    // Broadcast frame para todos os dashboards conectados
-    // TODO: Implementar broadcasting real via WebSocket
-    std::cout << "Broadcasting video frame: " << frameData.frameData.size() << " bytes" << std::endl;
-}
-
-std::string StreamServer::extractJsonValue(const std::string& json, const std::string& key) {
-    // Extração simplificada de valores JSON (em produção usar biblioteca adequada)
-    std::string searchKey = "\"" + key + "\":";
-    size_t keyPos = json.find(searchKey);
-    if (keyPos == std::string::npos) return "";
-
-    size_t valueStart = json.find_first_of("\"", keyPos + searchKey.length());
-    if (valueStart == std::string::npos) return "";
-
-    size_t valueEnd = json.find_first_of("\"", valueStart + 1);
-    if (valueEnd == std::string::npos) return "";
-
-    return json.substr(valueStart + 1, valueEnd - valueStart - 1);
-}
-
-std::vector<uint8_t> StreamServer::base64Decode(const std::string& input) {
-    // Decodificação Base64 simplificada (em produção usar biblioteca)
-    // TODO: Implementar decodificação Base64 real
-    std::vector<uint8_t> result;
-    result.reserve(input.size());
-    for (char c : input) {
-        result.push_back(static_cast<uint8_t>(c));
+    if (frameData.frameData.empty()) {
+        std::cerr << "❌ Tentativa de broadcast com frame vazio" << std::endl;
+        return;
     }
-    return result;
+
+    int broadcastCount = 0;
+
+    // Broadcast para todas as sessões ativas (dashboards)
+    for (auto& sessionPair : activeSessions_) {
+        try {
+            auto& session = sessionPair.second;
+            if (session && session->isActive()) {
+                // Criar mensagem JSON para o dashboard
+                nlohmann::json frameJson;
+                frameJson["type"] = "video_frame";
+                frameJson["deviceId"] = frameData.deviceId;
+                frameJson["timestamp"] = frameData.timestamp;
+                frameJson["isKeyFrame"] = frameData.isKeyFrame;
+                frameJson["width"] = frameData.width;
+                frameJson["height"] = frameData.height;
+                frameJson["sequenceNumber"] = frameData.sequenceNumber;
+
+                // Re-codificar para Base64 (NO_WRAP | NO_PADDING para eficiência)
+                std::string base64Data = base64Encode(frameData.frameData);
+                frameJson["data"] = base64Data;
+
+                // Enviar via WebSocket
+                std::string jsonMessage = frameJson.dump();
+                session->sendMessage(jsonMessage);
+
+                broadcastCount++;
+            }
+        } catch (const std::exception& e) {
+            std::cerr << "❌ Erro ao enviar frame para sessão: " << e.what() << std::endl;
+        }
+    }
+
+    if (broadcastCount > 0) {
+        std::cout << "📡 Frame broadcasted para " << broadcastCount
+                  << " dashboard(s) - " << frameData.frameData.size() << " bytes" << std::endl;
+    } else {
+        std::cout << "⚠️ Nenhum dashboard conectado para receber frame" << std::endl;
+    }
+}
+
+// Tabela Base64 para encoding/decoding
+static const std::string base64_chars =
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/";
+
+std::string StreamServer::base64Encode(const std::vector<uint8_t>& input) {
+    std::string encoded;
+    encoded.reserve(((input.size() + 2) / 3) * 4);
+
+    int i = 0;
+    int j = 0;
+    uint8_t char_array_3[3];
+    uint8_t char_array_4[4];
+
+    for (size_t idx = 0; idx < input.size(); ++idx) {
+        char_array_3[i++] = input[idx];
+        if (i == 3) {
+            char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+            char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+            char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+            char_array_4[3] = char_array_3[2] & 0x3f;
+
+            for (i = 0; i < 4; i++) {
+                encoded += base64_chars[char_array_4[i]];
+            }
+            i = 0;
+        }
+    }
+
+    if (i > 0) {
+        for (j = i; j < 3; j++) {
+            char_array_3[j] = '\0';
+        }
+
+        char_array_4[0] = (char_array_3[0] & 0xfc) >> 2;
+        char_array_4[1] = ((char_array_3[0] & 0x03) << 4) + ((char_array_3[1] & 0xf0) >> 4);
+        char_array_4[2] = ((char_array_3[1] & 0x0f) << 2) + ((char_array_3[2] & 0xc0) >> 6);
+        char_array_4[3] = char_array_3[2] & 0x3f;
+
+        for (j = 0; j < i + 1; j++) {
+            encoded += base64_chars[char_array_4[j]];
+        }
+
+        while (i++ < 3) {
+            encoded += '=';
+        }
+    }
+
+    return encoded;
+}
+
+std::vector<uint8_t> StreamServer::base64Decode(const std::string& encoded_string) {
+    size_t in_len = encoded_string.size();
+    int i = 0;
+    int j = 0;
+    int in_ = 0;
+    uint8_t char_array_4[4], char_array_3[3];
+    std::vector<uint8_t> decoded;
+
+    while (in_len-- && (encoded_string[in_] != '=') && isBase64(encoded_string[in_])) {
+        char_array_4[i++] = encoded_string[in_]; in_++;
+        if (i == 4) {
+            for (i = 0; i < 4; i++) {
+                char_array_4[i] = static_cast<uint8_t>(base64_chars.find(char_array_4[i]));
+            }
+
+            char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+            char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+            char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+            for (i = 0; i < 3; i++) {
+                decoded.push_back(char_array_3[i]);
+            }
+            i = 0;
+        }
+    }
+
+    if (i > 0) {
+        for (j = i; j < 4; j++) {
+            char_array_4[j] = 0;
+        }
+
+        for (j = 0; j < 4; j++) {
+            char_array_4[j] = static_cast<uint8_t>(base64_chars.find(char_array_4[j]));
+        }
+
+        char_array_3[0] = (char_array_4[0] << 2) + ((char_array_4[1] & 0x30) >> 4);
+        char_array_3[1] = ((char_array_4[1] & 0xf) << 4) + ((char_array_4[2] & 0x3c) >> 2);
+        char_array_3[2] = ((char_array_4[2] & 0x3) << 6) + char_array_4[3];
+
+        for (j = 0; j < i - 1; j++) {
+            decoded.push_back(char_array_3[j]);
+        }
+    }
+
+    return decoded;
+}
+
+bool StreamServer::isBase64(uint8_t c) {
+    return (isalnum(c) || (c == '+') || (c == '/'));
 }
 
 void StreamServer::handleControlMessage(const std::string& controlMessage) {

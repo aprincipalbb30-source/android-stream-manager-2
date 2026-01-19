@@ -385,65 +385,175 @@ void StreamingViewer::processIncomingFrameData(const QByteArray& frameData) {
 
 void StreamingViewer::decodeH264Frame(const QByteArray& encodedData, qint64 timestamp,
                                     bool isKeyFrame, int width, int height) {
-    // Implementação simplificada de decodificação H.264
-    // Em produção, usar FFmpeg ou QtAV
-
     try {
-        // Para demonstração, criar frame simulado baseado nos dados
-        // Em implementação real, seria necessário um decoder H.264 adequado
+        if (encodedData.isEmpty()) {
+            qWarning() << "Frame vazio recebido";
+            return;
+        }
 
-        if (encodedData.isEmpty()) return;
+        // Para implementação completa, seria necessário FFmpeg ou QtAV
+        // Por enquanto, implementar decoder H.264 básico usando Qt
 
-        // Simular decodificação - criar gradiente baseado no tamanho dos dados
-        QImage decodedFrame(width, height, QImage::Format_RGB32);
+        // Converter QByteArray para std::vector<uint8_t>
+        std::vector<uint8_t> frameData(encodedData.begin(), encodedData.end());
 
-        // Preencher com padrão baseado nos dados (simulação)
-        quint32 seed = qHash(encodedData.mid(0, 16)); // Usar primeiros bytes como seed
-        for (int y = 0; y < height; ++y) {
-            for (int x = 0; x < width; ++x) {
-                // Criar padrão visual baseado no seed e posição
-                int r = (seed + x * 17 + y * 31) % 256;
-                int g = (seed + x * 23 + y * 41) % 256;
-                int b = (seed + x * 29 + y * 37) % 256;
+        // Simular decodificação H.264 - em produção usar FFmpeg
+        QImage decodedFrame = decodeH264ToQImage(frameData, width, height, isKeyFrame);
 
-                decodedFrame.setPixel(x, y, qRgb(r, g, b));
+        if (!decodedFrame.isNull()) {
+            // Atualizar frame atual
+            currentFrame_ = decodedFrame;
+            deviceResolution_ = QSize(width, height);
+
+            // Atualizar resolução de display proporcionalmente
+            updateDisplayResolution(width, height);
+
+            frameCount_++;
+            emit frameReceived();
+
+            // Forçar repaint
+            update();
+
+            // Log de debug
+            if (isKeyFrame || (frameCount_ % 30) == 0) {
+                qDebug() << "🎬 Frame H.264 decoded:" << width << "x" << height
+                         << "bytes:" << encodedData.size()
+                         << "key:" << isKeyFrame
+                         << "fps:" << currentFps_
+                         << "seq:" << frameCount_;
             }
-        }
-
-        // Atualizar frame atual
-        currentFrame_ = decodedFrame;
-        deviceResolution_ = QSize(width, height);
-
-        // Atualizar resolução de display proporcionalmente
-        QRect displayRect = getDeviceDisplayRect();
-        double aspectRatio = (double)width / height;
-        int displayWidth = displayRect.width();
-        int displayHeight = static_cast<int>(displayWidth / aspectRatio);
-
-        if (displayHeight > displayRect.height()) {
-            displayHeight = displayRect.height();
-            displayWidth = static_cast<int>(displayHeight * aspectRatio);
-        }
-
-        displayResolution_ = QSize(displayWidth, displayHeight);
-
-        frameCount_++;
-        emit frameReceived();
-
-        // Forçar repaint
-        update();
-
-        // Log de debug
-        if (isKeyFrame || (frameCount_ % 30) == 0) {
-            qDebug() << "Frame decoded:" << width << "x" << height
-                     << "bytes:" << encodedData.size()
-                     << "key:" << isKeyFrame
-                     << "fps:" << currentFps_;
+        } else {
+            qWarning() << "Falha ao decodificar frame H.264";
         }
 
     } catch (const std::exception& e) {
         qWarning() << "Error decoding H.264 frame:" << e.what();
     }
+}
+
+QImage StreamingViewer::decodeH264ToQImage(const std::vector<uint8_t>& h264Data, int width, int height, bool isKeyFrame) {
+    // IMPLEMENTAÇÃO SIMPLIFICADA - Em produção usar FFmpeg ou QtAV
+    //
+    // Para implementação real, seria necessário:
+    // 1. Inicializar FFmpeg AVCodecContext para H.264
+    // 2. Alimentar dados H.264 para o decoder
+    // 3. Extrair frames YUV420
+    // 4. Converter para RGB
+    // 5. Criar QImage
+
+    try {
+        // Simulação: criar imagem baseada no hash dos dados H.264
+        // Isso simula um frame decodificado
+
+        QImage decodedFrame(width, height, QImage::Format_RGB32);
+
+        if (h264Data.size() < 4) {
+            return QImage(); // Frame muito pequeno
+        }
+
+        // Usar primeiros bytes como seed para gerar padrão visual
+        quint32 seed = 0;
+        for (size_t i = 0; i < std::min(size_t(4), h264Data.size()); ++i) {
+            seed = (seed << 8) | h264Data[i];
+        }
+
+        // Gerar padrão visual baseado no conteúdo H.264
+        decodedFrame.fill(Qt::black); // Fundo preto
+
+        QPainter painter(&decodedFrame);
+        painter.setRenderHint(QPainter::Antialiasing);
+
+        // Desenhar elementos simulados baseados no conteúdo
+        if (isKeyFrame) {
+            // Keyframes têm elementos visuais diferentes
+            painter.fillRect(0, 0, width, height, QColor(20, 20, 40));
+
+            // Desenhar "conteúdo" baseado no seed
+            for (int i = 0; i < 10; ++i) {
+                int x = (seed + i * 97) % width;
+                int y = (seed + i * 113) % height;
+                int w = 20 + (seed % 50);
+                int h = 20 + ((seed >> 8) % 50);
+
+                QColor color(
+                    (seed + i * 23) % 256,
+                    (seed + i * 41) % 256,
+                    (seed + i * 67) % 256
+                );
+
+                painter.fillRect(x, y, w, h, color);
+            }
+        } else {
+            // P-frames têm movimento simulado
+            painter.fillRect(0, 0, width, height, QColor(10, 10, 20));
+
+            // Desenhar movimento baseado no seed
+            int offset = (seed + frameCount_) % 50;
+            for (int i = 0; i < 5; ++i) {
+                int x = (seed + i * 73 + offset) % width;
+                int y = (seed + i * 89 + offset) % height;
+                int size = 15 + (seed % 20);
+
+                QColor color(100 + (seed % 100), 100 + ((seed >> 4) % 100), 200);
+                painter.setBrush(color);
+                painter.drawEllipse(x, y, size, size);
+            }
+        }
+
+        painter.end();
+
+        return decodedFrame;
+
+    } catch (const std::exception& e) {
+        qWarning() << "Erro na decodificação simulada:" << e.what();
+        return QImage();
+    }
+}
+
+void StreamingViewer::updateDisplayResolution(int frameWidth, int frameHeight) {
+    QRect displayRect = getDeviceDisplayRect();
+    double aspectRatio = (double)frameWidth / frameHeight;
+
+    int displayWidth = displayRect.width();
+    int displayHeight = static_cast<int>(displayWidth / aspectRatio);
+
+    if (displayHeight > displayRect.height()) {
+        displayHeight = displayRect.height();
+        displayWidth = static_cast<int>(displayHeight * aspectRatio);
+    }
+
+    displayResolution_ = QSize(displayWidth, displayHeight);
+}
+
+// Método para inicializar decoder FFmpeg (estrutura para implementação futura)
+bool StreamingViewer::initializeFFmpegDecoder(int width, int height) {
+    // TODO: Implementar inicialização real do FFmpeg
+    //
+    // Estrutura necessária:
+    // 1. avcodec_register_all()
+    // 2. avcodec_find_decoder(AV_CODEC_ID_H264)
+    // 3. avcodec_alloc_context3(codec)
+    // 4. Configurar contexto (width, height, pix_fmt)
+    // 5. avcodec_open2(context, codec, NULL)
+    // 6. Alocar AVFrame para output
+
+    qDebug() << "FFmpeg decoder initialization placeholder - width:" << width << "height:" << height;
+    return true;
+}
+
+// Método para decodificar frame com FFmpeg (estrutura para implementação futura)
+QImage StreamingViewer::decodeWithFFmpeg(const std::vector<uint8_t>& h264Data) {
+    // TODO: Implementar decodificação real FFmpeg
+    //
+    // Estrutura necessária:
+    // 1. Criar AVPacket com dados H.264
+    // 2. avcodec_send_packet(context, packet)
+    // 3. avcodec_receive_frame(context, frame)
+    // 4. Converter YUV420 para RGB
+    // 5. Criar QImage
+
+    qDebug() << "FFmpeg frame decoding placeholder - size:" << h264Data.size();
+    return QImage();
 }
 
 // Método para conectar sinais de vídeo do servidor (futuro)

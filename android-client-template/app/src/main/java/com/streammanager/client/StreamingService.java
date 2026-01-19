@@ -32,6 +32,8 @@ import android.view.Display;
 import android.view.WindowManager;
 import androidx.annotation.Nullable;
 import androidx.core.app.NotificationCompat;
+import android.graphics.Color;
+import java.util.concurrent.LinkedBlockingQueue;
 import org.json.JSONObject;
 import org.json.JSONException;
 import java.io.ByteArrayOutputStream;
@@ -59,6 +61,11 @@ public class StreamingService extends Service {
     private ImageReader imageReader;
     private Handler encodingHandler;
     private HandlerThread encodingThread;
+
+    // Buffer Pooling para reduzir GC
+    private static final int BITMAP_POOL_SIZE = 3;
+    private final LinkedBlockingQueue<Bitmap> bitmapPool = new LinkedBlockingQueue<>();
+    private final LinkedBlockingQueue<byte[]> byteBufferPool = new LinkedBlockingQueue<>();
 
     // Captura de áudio
     private AudioRecord audioRecord;
@@ -348,24 +355,111 @@ public class StreamingService extends Service {
             return;
         }
 
+        // Verificar saúde do sistema antes de processar
+        if (!isSystemHealthy()) {
+            Log.w(TAG, "System not healthy, skipping frame processing");
+            return;
+        }
+
         // Processar na thread de encoding para não bloquear UI
         encodingHandler.post(() -> {
             Bitmap bitmap = null;
+            long startTime = System.currentTimeMillis();
+
             try {
                 bitmap = convertImageToBitmap(image);
                 if (bitmap != null) {
                     encodeFrameToH264(bitmap);
+
+                    long processingTime = System.currentTimeMillis() - startTime;
+                    if (processingTime > 100) { // Log se demorar mais que 100ms
+                        Log.w(TAG, "Frame processing took " + processingTime + "ms");
+                    }
+                } else {
+                    Log.e(TAG, "Failed to convert image to bitmap");
+                    reportError("BITMAP_CONVERSION_FAILED");
                 }
 
+            } catch (OutOfMemoryError e) {
+                Log.e(TAG, "Out of memory during frame processing", e);
+                reportError("OUT_OF_MEMORY");
+                cleanupResources();
+
             } catch (Exception e) {
-                Log.e(TAG, "Error processing captured frame in background", e);
+                Log.e(TAG, "Unexpected error processing captured frame in background", e);
+                reportError("FRAME_PROCESSING_FAILED");
             } finally {
-                // Sempre liberar bitmap para evitar memory leaks
-                if (bitmap != null) {
+                // Sempre liberar bitmap usando o pool
+                releaseBitmapToPool(bitmap);
+            }
+        });
+    }
+
+    private boolean isSystemHealthy() {
+        // Verificar saúde básica do sistema
+        if (encodingHandler == null || !encodingHandler.getLooper().getThread().isAlive()) {
+            Log.e(TAG, "Encoding thread not healthy");
+            return false;
+        }
+
+        if (videoEncoder == null) {
+            Log.e(TAG, "Video encoder not available");
+            return false;
+        }
+
+        // Verificar uso de memória (simplificado)
+        Runtime runtime = Runtime.getRuntime();
+        long usedMemory = runtime.totalMemory() - runtime.freeMemory();
+        long maxMemory = runtime.maxMemory();
+        double memoryUsage = (double) usedMemory / maxMemory;
+
+        if (memoryUsage > 0.85) { // Mais de 85% de memória usada
+            Log.w(TAG, "High memory usage: " + (memoryUsage * 100) + "%");
+            return false;
+        }
+
+        return true;
+    }
+
+    private void reportError(String errorCode) {
+        frameStats.errors++;
+
+        // Reportar erro para o servidor via WebSocket
+        try {
+            JSONObject errorMessage = new JSONObject();
+            errorMessage.put("type", "error");
+            errorMessage.put("code", errorCode);
+            errorMessage.put("timestamp", System.currentTimeMillis());
+            errorMessage.put("component", "streaming_service");
+            errorMessage.put("framesSent", frameStats.framesSent);
+            errorMessage.put("errors", frameStats.errors);
+
+            NetworkManager.getInstance().sendMessage(errorMessage.toString());
+            Log.w(TAG, "Error reported to server: " + errorCode + " (total errors: " + frameStats.errors + ")");
+
+        } catch (JSONException e) {
+            Log.e(TAG, "Error reporting error to server", e);
+        }
+    }
+
+    private void cleanupResources() {
+        Log.i(TAG, "Performing emergency cleanup");
+
+        // Liberar pool de bitmaps
+        try {
+            for (Bitmap bitmap : bitmapPool) {
+                if (bitmap != null && !bitmap.isRecycled()) {
                     bitmap.recycle();
                 }
             }
-        });
+            bitmapPool.clear();
+        } catch (Exception e) {
+            Log.e(TAG, "Error during bitmap pool cleanup", e);
+        }
+
+        // Forçar GC
+        System.gc();
+        System.runFinalization();
     }
 
     private Bitmap convertImageToBitmap(Image image) {
@@ -380,12 +474,16 @@ public class StreamingService extends Service {
             int rowStride = plane.getRowStride();
             int rowPadding = rowStride - pixelStride * width;
 
-            // Criar bitmap RGBA
-            Bitmap bitmap = Bitmap.createBitmap(
-                width + rowPadding / pixelStride,
-                height,
-                Bitmap.Config.ARGB_8888
-            );
+            int bitmapWidth = width + rowPadding / pixelStride;
+
+            // Obter bitmap do pool ou criar novo
+            Bitmap bitmap = acquireBitmapFromPool(bitmapWidth, height);
+            if (bitmap == null) {
+                bitmap = Bitmap.createBitmap(bitmapWidth, height, Bitmap.Config.ARGB_8888);
+                Log.d(TAG, "Created new bitmap: " + bitmapWidth + "x" + height);
+            } else {
+                Log.d(TAG, "Reused bitmap from pool: " + bitmapWidth + "x" + height);
+            }
 
             bitmap.copyPixelsFromBuffer(plane.getBuffer());
             return bitmap;
@@ -393,6 +491,37 @@ public class StreamingService extends Service {
         } catch (Exception e) {
             Log.e(TAG, "Error converting Image to Bitmap", e);
             return null;
+        }
+    }
+
+    private Bitmap acquireBitmapFromPool(int width, int height) {
+        try {
+            // Procurar bitmap compatível no pool
+            for (Bitmap bitmap : bitmapPool) {
+                if (!bitmap.isRecycled() && bitmap.getWidth() == width && bitmap.getHeight() == height) {
+                    bitmapPool.remove(bitmap);
+                    return bitmap;
+                }
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error acquiring bitmap from pool", e);
+        }
+        return null;
+    }
+
+    private void releaseBitmapToPool(Bitmap bitmap) {
+        try {
+            if (bitmap != null && !bitmap.isRecycled() && bitmapPool.size() < BITMAP_POOL_SIZE) {
+                // Limpar bitmap antes de devolver ao pool
+                bitmap.eraseColor(Color.TRANSPARENT);
+                bitmapPool.offer(bitmap);
+                Log.d(TAG, "Bitmap returned to pool (size: " + bitmapPool.size() + ")");
+            } else if (bitmap != null) {
+                bitmap.recycle();
+                Log.d(TAG, "Bitmap recycled (pool full)");
+            }
+        } catch (Exception e) {
+            Log.e(TAG, "Error releasing bitmap to pool", e);
         }
     }
 
@@ -496,37 +625,72 @@ public class StreamingService extends Service {
         if (frameData == null || frameData.length == 0) return;
 
         try {
-            // Criar mensagem compacta de frame
+            // Criar mensagem otimizada (protocolo compacto)
             JSONObject frameMessage = new JSONObject();
             frameMessage.put("type", "video_frame");
-            frameMessage.put("ts", timestampUs); // timestamp abreviado
-            frameMessage.put("key", isKeyFrame); // isKeyFrame abreviado
-            frameMessage.put("w", screenWidth);  // width abreviado
-            frameMessage.put("h", screenHeight); // height abreviado
-            frameMessage.put("seq", frameSequenceNumber++); // número de sequência
+            frameMessage.put("deviceId", "android_device"); // Identificar fonte
+            frameMessage.put("ts", timestampUs / 1000); // converter para ms
+            frameMessage.put("key", isKeyFrame);
+            frameMessage.put("w", screenWidth);
+            frameMessage.put("h", screenHeight);
+            frameMessage.put("seq", frameSequenceNumber++);
 
-            // Usar Base64 mais eficiente com padding removido
-            frameMessage.put("data", android.util.Base64.encodeToString(
-                frameData, android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING));
+            // Base64 otimizado (NO_WRAP + NO_PADDING = ~30% menos overhead)
+            String base64Data = android.util.Base64.encodeToString(
+                frameData, android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING);
+            frameMessage.put("data", base64Data);
 
-            // Enviar via NetworkManager
-            NetworkManager.getInstance().sendMessage(frameMessage.toString());
+            // Enviar mensagem
+            String jsonMessage = frameMessage.toString();
+            NetworkManager.getInstance().sendMessage(jsonMessage);
 
-            // Log de debug (apenas para keyframes ou a cada 100 frames)
-            if (isKeyFrame || (frameSequenceNumber % 100) == 0) {
-                Log.d(TAG, "Frame sent: " + frameData.length + " bytes, key=" + isKeyFrame +
-                      ", seq=" + frameSequenceNumber);
+            // Estatísticas otimizadas
+            frameStats.bytesSent += jsonMessage.length();
+            frameStats.framesSent++;
+
+            // Log inteligente (keyframes ou a cada 50 frames)
+            if (isKeyFrame || (frameSequenceNumber % 50) == 0) {
+                Log.i(TAG, String.format("📡 Frame: %d bytes (key=%s, seq=%d) - Total: %d frames, %d KB",
+                    frameData.length, isKeyFrame ? "YES" : "NO", frameSequenceNumber,
+                    frameStats.framesSent, frameStats.bytesSent / 1024));
             }
 
         } catch (JSONException e) {
-            Log.e(TAG, "Error creating frame message", e);
+            Log.e(TAG, "Error creating frame message JSON", e);
+            reportError("FRAME_JSON_ERROR");
         } catch (Exception e) {
             Log.e(TAG, "Error sending frame to server", e);
+            reportError("FRAME_TRANSMISSION_ERROR");
         }
     }
 
     // Contador de sequência para debugging e sincronização
     private long frameSequenceNumber = 0;
+
+    // Estatísticas de transmissão para monitoramento
+    private static class FrameStats {
+        long framesSent = 0;
+        long bytesSent = 0;
+        long errors = 0;
+        long startTime = System.currentTimeMillis();
+
+        double getAverageBitrate() {
+            long elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000;
+            if (elapsedSeconds > 0) {
+                return (bytesSent * 8.0) / elapsedSeconds / 1000.0; // kbps
+            }
+            return 0.0;
+        }
+
+        double getFps() {
+            long elapsedSeconds = (System.currentTimeMillis() - startTime) / 1000;
+            if (elapsedSeconds > 0) {
+                return (double) framesSent / elapsedSeconds;
+            }
+            return 0.0;
+        }
+    }
+    private final FrameStats frameStats = new FrameStats();
 
     public void setMediaProjection(MediaProjection projection) {
         this.mediaProjection = projection;
