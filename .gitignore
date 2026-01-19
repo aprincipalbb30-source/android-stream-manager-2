@@ -1,0 +1,93 @@
+# Build directories
+build/
+cmake-build-debug/
+cmake-build-release/
+bin/
+lib/
+obj/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+
+# Android specific
+android-client-template/app/build/
+android-client-template/app/.cxx/
+android-client-template/.gradle/
+android-client-template/local.properties
+*.apk
+*.aab
+
+# Qt specific
+*.pro.user
+*.qbs.user
+*.qbs.user.*
+*.moc
+moc_*.cpp
+moc_*.h
+qrc_*.cpp
+ui_*.h
+Makefile*
+*build-*
+
+# Certificates and keys
+certs/
+*.key
+*.pem
+*.p12
+*.keystore
+
+# Cache and temporary files
+cache/
+*.cache
+temp/
+tmp/
+
+# Logs
+logs/
+*.log
+/var/log/android-stream-manager/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Configuration files (sensitive)
+config/secrets.json
+config/private_config.json
+.env
+
+# Test files
+test_output/
+test_results/
+*.test
+
+# Backup files
+*.bak
+*.backup
+*.old
+
+# Package files
+*.deb
+*.rpm
+*.tar.gz
+
+# Documentation build
+docs/build/
+docs/html/
+docs/latex/
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
