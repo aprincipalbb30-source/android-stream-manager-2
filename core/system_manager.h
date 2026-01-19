@@ -8,6 +8,7 @@
 #include "optimization/thread_pool.h"
 #include "optimization/build_cache.h"
 #include "optimization/stream_optimizer.h"
+#include "database/database_manager.h"
 
 namespace AndroidStreamManager {
 
@@ -42,6 +43,12 @@ public:
         size_t threadsActive;
         double cacheHitRate;
         std::chrono::seconds uptime;
+
+        // Estatísticas do database
+        size_t totalDevices;
+        size_t activeDevices;
+        size_t totalAuditLogs;
+        size_t databaseSizeBytes;
     };
     
     SystemStats getStats() const;

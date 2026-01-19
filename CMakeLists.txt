@@ -28,6 +28,12 @@ include_directories(${CMAKE_SOURCE_DIR}/compliance)
 find_package(OpenSSL REQUIRED)
 find_package(ZLIB REQUIRED)
 
+# SQLite3 (obrigatório)
+find_package(SQLite3 REQUIRED)
+if(NOT SQLite3_FOUND)
+    message(FATAL_ERROR "SQLite3 not found - database features are required")
+endif()
+
 # LZ4 (tentar encontrar)
 find_library(LZ4_LIBRARY NAMES lz4 liblz4)
 if(NOT LZ4_LIBRARY)
@@ -99,6 +105,16 @@ add_library(core_lib STATIC
     shared/protocol.cpp
 )
 
+# Biblioteca Database
+add_library(database_lib STATIC
+    database/database_manager.cpp
+)
+
+target_link_libraries(database_lib
+    SQLite::SQLite3
+    ${PLATFORM_LIBS}
+)
+
 # Biblioteca Server
 add_library(server_lib STATIC
     server/stream_server.cpp
@@ -107,6 +123,7 @@ add_library(server_lib STATIC
 )
 
 target_link_libraries(core_lib
+    database_lib
     optimization_lib
     security_lib
     compliance_lib
@@ -118,13 +135,19 @@ target_link_libraries(core_lib
 
 # Dashboard Qt
 if(BUILD_DASHBOARD)
-    find_package(Qt6 COMPONENTS Core Widgets Network Multimedia)
+    find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia)
 
     if(Qt6_FOUND)
+        # Configurar Qt6
+        set(CMAKE_AUTOMOC ON)
+        set(CMAKE_AUTORCC ON)
+        set(CMAKE_AUTOUIC ON)
+
         add_executable(android_stream_dashboard
             dashboard/main.cpp
             dashboard/main_window.cpp
             dashboard/apk_config_widget.cpp
+            dashboard/resources.qrc
         )
 
         target_link_libraries(android_stream_dashboard
@@ -134,6 +157,15 @@ if(BUILD_DASHBOARD)
             Qt6::Network
             Qt6::Multimedia
         )
+
+        # Configurações específicas do Qt
+        if(WIN32)
+            # Windows - nada especial necessário
+        elseif(UNIX)
+            # Linux - configurações específicas
+            target_compile_definitions(android_stream_dashboard PRIVATE QT_NO_FOREACH)
+        endif()
+
     else()
         message(WARNING "Qt6 not found - dashboard will not be built")
         set(BUILD_DASHBOARD OFF)

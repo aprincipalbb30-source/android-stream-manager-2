@@ -30,7 +30,8 @@ PASSO 1: PREPARAÇÃO DO AMBIENTE WSL UBUNTU
         apt-transport-https \
         ca-certificates \
         gnupg \
-        lsb-release
+        lsb-release \
+        libsqlite3-dev
 
 ================================================================================
 PASSO 2: INSTALAÇÃO DAS DEPENDÊNCIAS DO SISTEMA
@@ -132,7 +133,18 @@ PASSO 5: BUILD COMPLETO COM CMAKE
     # Deve conter:
     # android_stream_dashboard (se Qt6 instalado)
     # apk_builder
-    # stream_server (servidor principal)
+    # stream_server
+
+5.5 Executar dashboard Qt:
+    cd bin
+    ./android_stream_dashboard
+
+    # Interface gráfica será aberta com:
+    # - Lista de dispositivos conectados
+    # - Configuração de APK
+    # - Histórico de builds
+    # - Logs do sistema
+    # - Controles de streaming (servidor principal)
 
 ================================================================================
 PASSO 6: CONFIGURAÇÃO DO ANDROID SDK (OPCIONAL - PARA BUILD DE APKS)
@@ -234,7 +246,15 @@ PASSO 10: TESTE INTEGRADO DO SISTEMA
      # Executar servidor:
      ./stream_server --port 8443
 
-10.4 Verificar conectividade de rede:
+10.4 Testar persistência de dados:
+     # O servidor cria automaticamente stream_manager.db
+     ls -la /etc/android-stream-manager/
+     # Deve conter: stream_manager.db
+
+     # Verificar tamanho do banco:
+     du -h /etc/android-stream-manager/stream_manager.db
+
+10.5 Verificar conectividade de rede:
      # Testar API do servidor
      curl -X GET http://localhost:8443/api/health
 

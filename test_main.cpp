@@ -2,11 +2,13 @@
 #include <memory>
 #include <thread>
 #include <chrono>
+#include <filesystem>
 #include "core/system_manager.h"
 #include "core/apk_builder.h"
 #include "optimization/thread_pool.h"
 #include "optimization/stream_optimizer.h"
 #include "optimization/build_cache.h"
+#include "database/database_manager.h"
 
 using namespace AndroidStreamManager;
 
@@ -141,16 +143,81 @@ void testApkBuilder() {
     std::cout << "Build real requer template Android SDK configurado" << std::endl;
 }
 
+void testDatabaseManager() {
+    std::cout << "\n=== Teste DatabaseManager ===" << std::endl;
+
+    // Criar arquivo temporário para teste
+    std::string testDbPath = "/tmp/test_stream_manager.db";
+    std::filesystem::remove(testDbPath); // Remover se existir
+
+    // Inicializar database
+    if (!DatabaseManager::getInstance().initialize(testDbPath)) {
+        std::cerr << "Falha ao inicializar database para teste" << std::endl;
+        return;
+    }
+
+    std::cout << "Database inicializado com sucesso" << std::endl;
+
+    // Testar registro de dispositivo
+    AndroidStreamManager::RegisteredDevice device;
+    device.deviceId = "test_device_001";
+    device.deviceName = "Test Device";
+    device.deviceModel = "TestModel";
+    device.androidVersion = "13.0";
+    device.registrationKey = "test_key_123";
+    device.active = true;
+
+    if (DatabaseManager::getInstance().registerDevice(device)) {
+        std::cout << "✓ Dispositivo registrado com sucesso" << std::endl;
+    } else {
+        std::cout << "✗ Falha ao registrar dispositivo" << std::endl;
+    }
+
+    // Testar busca de dispositivo
+    auto foundDevice = DatabaseManager::getInstance().getDeviceById("test_device_001");
+    if (foundDevice) {
+        std::cout << "✓ Dispositivo encontrado: " << foundDevice->deviceName << std::endl;
+    } else {
+        std::cout << "✗ Dispositivo não encontrado" << std::endl;
+    }
+
+    // Testar log de auditoria
+    AndroidStreamManager::AuditLog auditLog;
+    auditLog.operatorId = "test_operator";
+    auditLog.action = "DEVICE_REGISTER";
+    auditLog.resource = "test_device_001";
+    auditLog.details = "Device registration test";
+    auditLog.ipAddress = "127.0.0.1";
+
+    if (DatabaseManager::getInstance().logAuditEvent(auditLog)) {
+        std::cout << "✓ Log de auditoria registrado" << std::endl;
+    } else {
+        std::cout << "✗ Falha ao registrar log de auditoria" << std::endl;
+    }
+
+    // Testar estatísticas
+    auto stats = DatabaseManager::getInstance().getStats();
+    std::cout << "✓ Estatísticas - Dispositivos: " << stats.totalDevices
+              << ", Logs: " << stats.totalAuditLogs
+              << ", Tamanho DB: " << stats.databaseSizeBytes << " bytes" << std::endl;
+
+    // Limpar arquivo de teste
+    DatabaseManager::getInstance().shutdown();
+    std::filesystem::remove(testDbPath);
+    std::cout << "Database de teste limpo" << std::endl;
+}
+
 int main() {
     std::cout << "=== Testes do Android Stream Manager ===" << std::endl;
     std::cout << "Testando componentes implementados..." << std::endl;
 
     try {
-        // Executar testes
-        testThreadPool();
-        testStreamOptimizer();
-        testBuildCache();
-        testApkBuilder();
+    // Executar testes
+    testThreadPool();
+    testStreamOptimizer();
+    testBuildCache();
+    testApkBuilder();
+    testDatabaseManager();
 
         std::cout << "\n=== Todos os testes concluídos ===" << std::endl;
 

@@ -37,13 +37,22 @@ bool SystemManager::initialize(const std::string& configPath) {
         CorporateSigningManager::getInstance().initialize(
             configPath + "/master.key",
             configPath + "/certchain.pem");
-        
-        // 4. Iniciar manutenção periódica
+
+        // 4. Inicializar banco de dados
+        std::string dbPath = configPath + "/stream_manager.db";
+        if (!DatabaseManager::getInstance().initialize(dbPath)) {
+            throw std::runtime_error("Falha ao inicializar banco de dados");
+        }
+
+        // 5. Iniciar manutenção periódica
         threadPool.enqueue([this]() {
             while (initialized) {
                 std::this_thread::sleep_for(std::chrono::minutes(5));
                 buildCache.cleanup();
                 JwtManager::getInstance().rotateKeys();
+
+                // Limpeza periódica do database (registros antigos)
+                DatabaseManager::getInstance().cleanupOldRecords(30); // 30 dias
             }
         });
         
@@ -160,16 +169,23 @@ bool SystemManager::streamData(const std::string& deviceId,
 
 SystemManager::SystemStats SystemManager::getStats() const {
     SystemStats stats;
-    
+
     stats.activeSessions = activeSessions.size();
     stats.buildsInCache = buildCache.getCurrentSize();
     stats.threadsActive = threadPool.getActiveThreads();
     stats.uptime = std::chrono::duration_cast<std::chrono::seconds>(
         std::chrono::system_clock::now() - startTime);
-    
+
     // Calcular taxa de cache hit (simplificado)
     stats.cacheHitRate = 0.85; // Placeholder
-    
+
+    // Estatísticas do database
+    auto dbStats = DatabaseManager::getInstance().getStats();
+    stats.totalDevices = dbStats.totalDevices;
+    stats.activeDevices = dbStats.activeDevices;
+    stats.totalAuditLogs = dbStats.totalAuditLogs;
+    stats.databaseSizeBytes = dbStats.databaseSizeBytes;
+
     return stats;
 }
 
