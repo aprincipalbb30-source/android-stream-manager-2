@@ -8,7 +8,7 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Opções de build
 option(BUILD_DASHBOARD "Build Qt Dashboard" ON)
 option(BUILD_APK_BUILDER "Build APK Builder" ON)
-option(BUILD_SERVER "Build Server Component" ON)
+option(BUILD_SERVER "Build Stream Server" ON)
 option(BUILD_TESTS "Build unit tests" OFF)
 
 # Diretórios
@@ -99,6 +99,13 @@ add_library(core_lib STATIC
     shared/protocol.cpp
 )
 
+# Biblioteca Server
+add_library(server_lib STATIC
+    server/stream_server.cpp
+    server/websocket_session.cpp
+    server/http_server.cpp
+)
+
 target_link_libraries(core_lib
     optimization_lib
     security_lib
@@ -147,6 +154,19 @@ if(BUILD_APK_BUILDER)
     )
 endif()
 
+# Stream Server
+if(BUILD_SERVER)
+    add_executable(stream_server
+        server/main.cpp
+    )
+
+    target_link_libraries(stream_server
+        server_lib
+        core_lib
+        ${PLATFORM_LIBS}
+    )
+endif()
+
 # Servidor (se implementado)
 if(BUILD_SERVER)
     # TODO: Implementar servidor principal
@@ -189,6 +209,10 @@ endif()
 
 if(BUILD_APK_BUILDER)
     install(TARGETS apk_builder DESTINATION bin)
+endif()
+
+if(BUILD_SERVER)
+    install(TARGETS stream_server DESTINATION bin)
 endif()
 
 install(DIRECTORY shared/ DESTINATION include/android-stream-manager

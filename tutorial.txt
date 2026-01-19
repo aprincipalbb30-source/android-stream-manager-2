@@ -132,6 +132,7 @@ PASSO 5: BUILD COMPLETO COM CMAKE
     # Deve conter:
     # android_stream_dashboard (se Qt6 instalado)
     # apk_builder
+    # stream_server (servidor principal)
 
 ================================================================================
 PASSO 6: CONFIGURAÇÃO DO ANDROID SDK (OPCIONAL - PARA BUILD DE APKS)
@@ -226,8 +227,22 @@ PASSO 10: TESTE INTEGRADO DO SISTEMA
      cd build/bin
      ./apk_builder --help
 
-10.3 Verificar conectividade de rede:
-     nc -zv localhost 8443 2>/dev/null || echo "Porta 8443 fechada (normal)"
+10.3 Executar servidor principal:
+     cd build/bin
+     ./stream_server --help
+
+     # Executar servidor:
+     ./stream_server --port 8443
+
+10.4 Verificar conectividade de rede:
+     # Testar API do servidor
+     curl -X GET http://localhost:8443/api/health
+
+     # Ver estatísticas
+     curl -X GET http://localhost:8443/api/stats
+
+     # Listar dispositivos conectados
+     curl -X GET http://localhost:8443/api/devices
 
 ================================================================================
 PASSO 11: INSTALAÇÃO DO APK NO DISPOSITIVO ANDROID
