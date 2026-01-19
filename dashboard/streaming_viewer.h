@@ -79,6 +79,8 @@ signals:
 
 public slots:
     void onFrameDataReceived(const QByteArray& frameData);
+    void onVideoFrameReceived(const QString& deviceId, const QByteArray& encodedData,
+                             qint64 timestamp, bool isKeyFrame, int width, int height);
     void onDeviceDisconnected();
     void onConnectionError(const QString& error);
 
@@ -116,6 +118,12 @@ private:
     QString virtualKeyToString(VirtualKey key) const;
     QPixmap getVirtualKeyIcon(VirtualKey key) const;
     QColor getVirtualKeyColor(VirtualKey key) const;
+
+    // Decodificação de vídeo
+    void processIncomingFrameData(const QByteArray& frameData);
+    void decodeH264Frame(const QByteArray& encodedData, qint64 timestamp,
+                        bool isKeyFrame, int width, int height);
+    void connectToVideoStream();
 
     // Estado interno
     QString deviceId_;

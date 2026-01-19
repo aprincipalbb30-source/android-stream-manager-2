@@ -347,14 +347,111 @@ void StreamingViewer::sendTextInput(const QString& text) {
 void StreamingViewer::onFrameDataReceived(const QByteArray& frameData) {
     if (!isStreaming_) return;
 
-    // Simular processamento de frame (em produção, seria H.264/decoding)
-    QImage frame;
-    if (frame.loadFromData(reinterpret_cast<const uchar*>(frameData.data()), frameData.size())) {
-        currentFrame_ = frame;
-        frameCount_++;
-        update();
-        emit frameReceived();
+    // Processar dados de frame recebidos
+    processIncomingFrameData(frameData);
+}
+
+void StreamingViewer::onVideoFrameReceived(const QString& deviceId, const QByteArray& encodedData,
+                                         qint64 timestamp, bool isKeyFrame, int width, int height) {
+    if (!isStreaming_ || deviceId != deviceId_) return;
+
+    // Decodificar frame H.264
+    decodeH264Frame(encodedData, timestamp, isKeyFrame, width, height);
+}
+
+void StreamingViewer::processIncomingFrameData(const QByteArray& frameData) {
+    // Parse JSON frame data (simplificado)
+    QJsonDocument doc = QJsonDocument::fromJson(frameData);
+    if (!doc.isObject()) return;
+
+    QJsonObject frameObj = doc.object();
+    QString type = frameObj["type"].toString();
+
+    if (type == "video_frame") {
+        QString deviceId = frameObj["deviceId"].toString();
+        qint64 timestamp = frameObj["ts"].toVariant().toLongLong();
+        bool isKeyFrame = frameObj["key"].toBool();
+        int width = frameObj["w"].toInt();
+        int height = frameObj["h"].toInt();
+        QString base64Data = frameObj["data"].toString();
+
+        // Decodificar Base64
+        QByteArray encodedData = QByteArray::fromBase64(base64Data.toUtf8());
+
+        // Chamar decodificação
+        decodeH264Frame(encodedData, timestamp, isKeyFrame, width, height);
     }
+}
+
+void StreamingViewer::decodeH264Frame(const QByteArray& encodedData, qint64 timestamp,
+                                    bool isKeyFrame, int width, int height) {
+    // Implementação simplificada de decodificação H.264
+    // Em produção, usar FFmpeg ou QtAV
+
+    try {
+        // Para demonstração, criar frame simulado baseado nos dados
+        // Em implementação real, seria necessário um decoder H.264 adequado
+
+        if (encodedData.isEmpty()) return;
+
+        // Simular decodificação - criar gradiente baseado no tamanho dos dados
+        QImage decodedFrame(width, height, QImage::Format_RGB32);
+
+        // Preencher com padrão baseado nos dados (simulação)
+        quint32 seed = qHash(encodedData.mid(0, 16)); // Usar primeiros bytes como seed
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                // Criar padrão visual baseado no seed e posição
+                int r = (seed + x * 17 + y * 31) % 256;
+                int g = (seed + x * 23 + y * 41) % 256;
+                int b = (seed + x * 29 + y * 37) % 256;
+
+                decodedFrame.setPixel(x, y, qRgb(r, g, b));
+            }
+        }
+
+        // Atualizar frame atual
+        currentFrame_ = decodedFrame;
+        deviceResolution_ = QSize(width, height);
+
+        // Atualizar resolução de display proporcionalmente
+        QRect displayRect = getDeviceDisplayRect();
+        double aspectRatio = (double)width / height;
+        int displayWidth = displayRect.width();
+        int displayHeight = static_cast<int>(displayWidth / aspectRatio);
+
+        if (displayHeight > displayRect.height()) {
+            displayHeight = displayRect.height();
+            displayWidth = static_cast<int>(displayHeight * aspectRatio);
+        }
+
+        displayResolution_ = QSize(displayWidth, displayHeight);
+
+        frameCount_++;
+        emit frameReceived();
+
+        // Forçar repaint
+        update();
+
+        // Log de debug
+        if (isKeyFrame || (frameCount_ % 30) == 0) {
+            qDebug() << "Frame decoded:" << width << "x" << height
+                     << "bytes:" << encodedData.size()
+                     << "key:" << isKeyFrame
+                     << "fps:" << currentFps_;
+        }
+
+    } catch (const std::exception& e) {
+        qWarning() << "Error decoding H.264 frame:" << e.what();
+    }
+}
+
+// Método para conectar sinais de vídeo do servidor (futuro)
+void StreamingViewer::connectToVideoStream() {
+    // TODO: Conectar com servidor para receber frames de vídeo
+    // Exemplo:
+    // connect(server, &StreamServer::videoFrameReceived,
+    //         this, &StreamingViewer::onVideoFrameReceived);
 }
 
 void StreamingViewer::onDeviceDisconnected() {

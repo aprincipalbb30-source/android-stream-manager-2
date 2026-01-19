@@ -13,6 +13,11 @@ import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.media.AudioFormat;
 import android.media.AudioRecord;
+import android.media.Image;
+import android.media.ImageReader;
+import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaFormat;
 import android.media.MediaRecorder;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
@@ -49,6 +54,12 @@ public class StreamingService extends Service {
     private VirtualDisplay virtualDisplay;
     private ScreenCaptureCallback screenCaptureCallback;
 
+    // H.264 Encoding
+    private MediaCodec videoEncoder;
+    private ImageReader imageReader;
+    private Handler encodingHandler;
+    private HandlerThread encodingThread;
+
     // Captura de áudio
     private AudioRecord audioRecord;
     private AudioCaptureThread audioCaptureThread;
@@ -78,6 +89,7 @@ public class StreamingService extends Service {
         // Inicializar componentes
         initializeScreenCapture();
         initializeAudioCapture();
+        initializeVideoEncoding();
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, createNotification());
 
@@ -119,6 +131,51 @@ public class StreamingService extends Service {
                 bufferSize * 2
             );
         }
+    }
+
+    private void initializeVideoEncoding() {
+        // Criar thread dedicado para encoding de vídeo (background priority)
+        encodingThread = new HandlerThread("VideoEncoding", android.os.Process.THREAD_PRIORITY_BACKGROUND);
+        encodingThread.start();
+        encodingHandler = new Handler(encodingThread.getLooper());
+
+        // Inicializar encoder na thread de encoding
+        encodingHandler.post(() -> {
+            try {
+                initializeEncoderInBackground();
+            } catch (Exception e) {
+                Log.e(TAG, "Failed to initialize video encoding in background", e);
+                videoEncoder = null;
+            }
+        });
+    }
+
+    private void initializeEncoderInBackground() throws Exception {
+        // Configurar MediaCodec para H.264 encoding
+        videoEncoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+        MediaFormat format = MediaFormat.createVideoFormat(
+            MediaFormat.MIMETYPE_VIDEO_AVC,
+            screenWidth,
+            screenHeight
+        );
+
+        // Configurações otimizadas de encoding
+        format.setInteger(MediaFormat.KEY_BIT_RATE, 1500000); // 1.5 Mbps (reduzido para estabilidade)
+        format.setInteger(MediaFormat.KEY_FRAME_RATE, 25); // 25 FPS (reduzido para performance)
+        format.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 3); // Keyframe a cada 3 segundos
+        format.setInteger(MediaFormat.KEY_COLOR_FORMAT,
+            MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface);
+
+        // Configurações de qualidade
+        format.setInteger(MediaFormat.KEY_BITRATE_MODE, MediaCodecInfo.EncoderCapabilities.BITRATE_MODE_VBR);
+        format.setInteger(MediaFormat.KEY_PROFILE, MediaCodecInfo.CodecProfileLevel.AVCProfileMain);
+        format.setInteger(MediaFormat.KEY_LEVEL, MediaCodecInfo.CodecProfileLevel.AVCLevel31);
+
+        videoEncoder.configure(format, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+        videoEncoder.start();
+
+        Log.i(TAG, "Video encoder initialized successfully: " + screenWidth + "x" + screenHeight +
+              " @25fps, 1.5Mbps, Main profile");
     }
 
     @Override
@@ -202,7 +259,11 @@ public class StreamingService extends Service {
             return;
         }
 
-        screenCaptureCallback = new ScreenCaptureCallback();
+        // Inicializar callback com ImageReader
+        screenCaptureCallback = new ScreenCaptureCallback(this);
+        screenCaptureCallback.initialize(screenWidth, screenHeight, screenDensity);
+
+        // Criar VirtualDisplay com surface do ImageReader
         virtualDisplay = mediaProjection.createVirtualDisplay(
             "StreamManagerScreen",
             screenWidth,
@@ -214,7 +275,7 @@ public class StreamingService extends Service {
             null
         );
 
-        Log.i(TAG, "Captura de tela iniciada");
+        Log.i(TAG, "Captura de tela real iniciada: " + screenWidth + "x" + screenHeight);
     }
 
     private void stopScreenCapture() {
@@ -226,6 +287,17 @@ public class StreamingService extends Service {
         if (screenCaptureCallback != null) {
             screenCaptureCallback.release();
             screenCaptureCallback = null;
+        }
+
+        // Parar encoder de vídeo
+        if (videoEncoder != null) {
+            try {
+                videoEncoder.stop();
+                videoEncoder.release();
+            } catch (Exception e) {
+                Log.e(TAG, "Error stopping video encoder", e);
+            }
+            videoEncoder = null;
         }
 
         Log.i(TAG, "Captura de tela parada");
@@ -269,6 +341,192 @@ public class StreamingService extends Service {
 
         Log.i(TAG, "Captura de áudio parada");
     }
+
+    // Método chamado quando um frame é capturado
+    public void processCapturedFrame(Image image) {
+        if (!isStreaming.get() || videoEncoder == null || image == null) {
+            return;
+        }
+
+        // Processar na thread de encoding para não bloquear UI
+        encodingHandler.post(() -> {
+            Bitmap bitmap = null;
+            try {
+                bitmap = convertImageToBitmap(image);
+                if (bitmap != null) {
+                    encodeFrameToH264(bitmap);
+                }
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing captured frame in background", e);
+            } finally {
+                // Sempre liberar bitmap para evitar memory leaks
+                if (bitmap != null) {
+                    bitmap.recycle();
+                }
+            }
+        });
+    }
+
+    private Bitmap convertImageToBitmap(Image image) {
+        try {
+            Image.Plane[] planes = image.getPlanes();
+            if (planes.length == 0) return null;
+
+            Image.Plane plane = planes[0];
+            int width = image.getWidth();
+            int height = image.getHeight();
+            int pixelStride = plane.getPixelStride();
+            int rowStride = plane.getRowStride();
+            int rowPadding = rowStride - pixelStride * width;
+
+            // Criar bitmap RGBA
+            Bitmap bitmap = Bitmap.createBitmap(
+                width + rowPadding / pixelStride,
+                height,
+                Bitmap.Config.ARGB_8888
+            );
+
+            bitmap.copyPixelsFromBuffer(plane.getBuffer());
+            return bitmap;
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error converting Image to Bitmap", e);
+            return null;
+        }
+    }
+
+    private void encodeFrameToH264(Bitmap bitmap) {
+        if (videoEncoder == null || bitmap == null) return;
+
+        try {
+            // Obter input buffer do encoder
+            int inputBufferIndex = videoEncoder.dequeueInputBuffer(10000); // 10ms timeout
+            if (inputBufferIndex >= 0) {
+                ByteBuffer inputBuffer = videoEncoder.getInputBuffer(inputBufferIndex);
+
+                if (inputBuffer != null) {
+                    inputBuffer.clear();
+
+                    // Criar array de bytes do bitmap (RGBA)
+                    int bitmapSize = bitmap.getByteCount();
+                    byte[] bitmapBytes = new byte[bitmapSize];
+                    ByteBuffer bitmapBuffer = ByteBuffer.allocate(bitmapSize);
+                    bitmap.copyPixelsToBuffer(bitmapBuffer);
+                    bitmapBuffer.rewind();
+                    bitmapBuffer.get(bitmapBytes);
+
+                    // Copiar para input buffer do encoder
+                    inputBuffer.put(bitmapBytes);
+
+                    // Timestamp para sincronização
+                    long presentationTimeUs = System.nanoTime() / 1000;
+
+                    videoEncoder.queueInputBuffer(
+                        inputBufferIndex,
+                        0,
+                        bitmapBytes.length,
+                        presentationTimeUs,
+                        0
+                    );
+
+                    // Processar frames codificados
+                    processEncodedFrames();
+                }
+            } else {
+                Log.w(TAG, "No input buffer available for encoding");
+            }
+
+        } catch (Exception e) {
+            Log.e(TAG, "Error encoding frame to H.264", e);
+        }
+    }
+
+    // Método para ajustar bitrate dinamicamente baseado na qualidade da rede
+    public void adjustVideoBitrate(int networkQuality) {
+        if (videoEncoder == null) return;
+
+        encodingHandler.post(() -> {
+            try {
+                Bundle params = new Bundle();
+
+                // Ajustar bitrate baseado na qualidade da rede (0-100)
+                int baseBitrate = 1000000; // 1 Mbps base
+                int adjustedBitrate = baseBitrate * networkQuality / 100;
+                adjustedBitrate = Math.max(500000, Math.min(3000000, adjustedBitrate)); // 0.5-3 Mbps
+
+                params.putInt(MediaCodec.PARAMETER_KEY_VIDEO_BITRATE, adjustedBitrate);
+                videoEncoder.setParameters(params);
+
+                Log.d(TAG, "Video bitrate adjusted to: " + adjustedBitrate + " bps (quality: " + networkQuality + "%)");
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error adjusting video bitrate", e);
+            }
+        });
+    }
+
+    private void processEncodedFrames() {
+        MediaCodec.BufferInfo bufferInfo = new MediaCodec.BufferInfo();
+
+        int outputBufferIndex = videoEncoder.dequeueOutputBuffer(bufferInfo, 0);
+        while (outputBufferIndex >= 0) {
+            try {
+                ByteBuffer outputBuffer = videoEncoder.getOutputBuffer(outputBufferIndex);
+                if (outputBuffer != null) {
+                    byte[] frameData = new byte[bufferInfo.size];
+                    outputBuffer.get(frameData);
+
+                    // Enviar frame via WebSocket
+                    sendFrameToServer(frameData, bufferInfo.presentationTimeUs,
+                                    (bufferInfo.flags & MediaCodec.BUFFER_FLAG_KEY_FRAME) != 0);
+                }
+
+                videoEncoder.releaseOutputBuffer(outputBufferIndex, false);
+                outputBufferIndex = videoEncoder.dequeueOutputBuffer(bufferInfo, 0);
+
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing encoded frame", e);
+                break;
+            }
+        }
+    }
+
+    private void sendFrameToServer(byte[] frameData, long timestampUs, boolean isKeyFrame) {
+        if (frameData == null || frameData.length == 0) return;
+
+        try {
+            // Criar mensagem compacta de frame
+            JSONObject frameMessage = new JSONObject();
+            frameMessage.put("type", "video_frame");
+            frameMessage.put("ts", timestampUs); // timestamp abreviado
+            frameMessage.put("key", isKeyFrame); // isKeyFrame abreviado
+            frameMessage.put("w", screenWidth);  // width abreviado
+            frameMessage.put("h", screenHeight); // height abreviado
+            frameMessage.put("seq", frameSequenceNumber++); // número de sequência
+
+            // Usar Base64 mais eficiente com padding removido
+            frameMessage.put("data", android.util.Base64.encodeToString(
+                frameData, android.util.Base64.NO_WRAP | android.util.Base64.NO_PADDING));
+
+            // Enviar via NetworkManager
+            NetworkManager.getInstance().sendMessage(frameMessage.toString());
+
+            // Log de debug (apenas para keyframes ou a cada 100 frames)
+            if (isKeyFrame || (frameSequenceNumber % 100) == 0) {
+                Log.d(TAG, "Frame sent: " + frameData.length + " bytes, key=" + isKeyFrame +
+                      ", seq=" + frameSequenceNumber);
+            }
+
+        } catch (JSONException e) {
+            Log.e(TAG, "Error creating frame message", e);
+        } catch (Exception e) {
+            Log.e(TAG, "Error sending frame to server", e);
+        }
+    }
+
+    // Contador de sequência para debugging e sincronização
+    private long frameSequenceNumber = 0;
 
     public void setMediaProjection(MediaProjection projection) {
         this.mediaProjection = projection;
@@ -333,6 +591,10 @@ public class StreamingService extends Service {
 
         if (handlerThread != null) {
             handlerThread.quitSafely();
+        }
+
+        if (encodingThread != null) {
+            encodingThread.quitSafely();
         }
 
         instance = null;
@@ -411,24 +673,51 @@ public class StreamingService extends Service {
     }
 
     // Classe para captura de tela (simplificada)
-    private static class ScreenCaptureCallback implements android.view.SurfaceHolder.Callback {
-        // Implementação básica - em produção implementar captura real
-        @Override
-        public void surfaceCreated(android.view.SurfaceHolder holder) {}
+    private static class ScreenCaptureCallback implements ImageReader.OnImageAvailableListener {
+        private final StreamingService service;
+        private ImageReader imageReader;
+        private android.view.Surface surface;
+
+        public ScreenCaptureCallback(StreamingService service) {
+            this.service = service;
+        }
+
+        public void initialize(int width, int height, int density) {
+            imageReader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2);
+            imageReader.setOnImageAvailableListener(this, service.encodingHandler);
+
+            surface = imageReader.getSurface();
+            Log.i(TAG, "ScreenCaptureCallback initialized: " + width + "x" + height);
+        }
 
         @Override
-        public void surfaceChanged(android.view.SurfaceHolder holder, int format, int width, int height) {}
-
-        @Override
-        public void surfaceDestroyed(android.view.SurfaceHolder holder) {}
+        public void onImageAvailable(ImageReader reader) {
+            Image image = null;
+            try {
+                image = reader.acquireLatestImage();
+                if (image != null) {
+                    service.processCapturedFrame(image);
+                }
+            } catch (Exception e) {
+                Log.e(TAG, "Error processing captured frame", e);
+            } finally {
+                if (image != null) {
+                    image.close();
+                }
+            }
+        }
 
         public android.view.Surface getSurface() {
-            // Retornar surface para captura
-            return null; // Implementar adequadamente
+            return surface;
         }
 
         public void release() {
-            // Limpar recursos
+            if (imageReader != null) {
+                imageReader.close();
+                imageReader = null;
+            }
+            surface = null;
+            Log.i(TAG, "ScreenCaptureCallback released");
         }
     }
 }

@@ -236,6 +236,16 @@ if(BUILD_TESTS)
             GTest::GTest
             GTest::Main
         )
+    endif()
+
+    # Teste de streaming
+    add_executable(test_streaming
+        test_streaming.cpp
+    )
+
+    target_link_libraries(test_streaming
+        core_lib
+    )
 
         add_test(NAME unit_tests COMMAND unit_tests)
     else()

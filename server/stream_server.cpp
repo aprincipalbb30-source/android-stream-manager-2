@@ -418,6 +418,12 @@ void StreamServer::handleMessage(const std::string& message) {
             handleStreamData(message);
         } else if (message.find("\"type\": \"control\"") != std::string::npos) {
             handleControlMessage(message);
+        } else if (message.find("\"type\": \"video_frame\"") != std::string::npos) {
+            handleVideoFrame(message);
+        } else if (message.find("\"type\": \"app_monitoring\"") != std::string::npos) {
+            handleAppMonitoringCommand(message);
+        } else if (message.find("\"type\": \"screen_lock\"") != std::string::npos) {
+            handleScreenLockCommand(message);
         }
 
         if (messageReceivedCallback_) {
@@ -457,6 +463,113 @@ void StreamServer::handleStreamData(const std::string& dataMessage) {
 
         streamDataCallback_(data.deviceId, data);
     }
+}
+
+void StreamServer::handleVideoFrame(const std::string& frameMessage) {
+    // Processar frame de vídeo H.264
+    try {
+        // Parse JSON (simplificado - em produção usar biblioteca JSON)
+        std::string timestamp = extractJsonValue(frameMessage, "timestamp");
+        std::string isKeyFrame = extractJsonValue(frameMessage, "isKeyFrame");
+        std::string data = extractJsonValue(frameMessage, "data");
+
+        if (!data.empty()) {
+            // Decodificar Base64 (simplificado)
+            std::vector<uint8_t> frameData = base64Decode(data);
+
+            // Criar dados de stream
+            StreamData streamData;
+            streamData.deviceId = "android_device"; // TODO: Obter do contexto
+            streamData.dataType = StreamData::DataType::VIDEO_H264;
+            streamData.timestamp = std::chrono::duration_cast<std::chrono::milliseconds>(
+                std::chrono::system_clock::now().time_since_epoch()).count();
+            streamData.frameData = frameData;
+            streamData.isKeyFrame = (isKeyFrame == "true");
+
+            // Notificar callbacks
+            if (streamDataCallback_) {
+                streamDataCallback_(streamData.deviceId, streamData);
+            }
+
+            // Broadcast para dashboards conectados
+            broadcastVideoFrame(streamData);
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "Erro ao processar frame de vídeo: " << e.what() << std::endl;
+    }
+}
+
+void StreamServer::handleAppMonitoringCommand(const std::string& commandMessage) {
+    // Processar comandos de monitoramento de apps
+    std::cout << "Comando de monitoramento de apps: " << commandMessage << std::endl;
+
+    try {
+        std::string action = extractJsonValue(commandMessage, "action");
+        std::string deviceId = "android_device"; // TODO: Obter do contexto
+
+        if (action == "start_monitoring") {
+            std::cout << "Iniciando monitoramento de apps para: " << deviceId << std::endl;
+        } else if (action == "stop_monitoring") {
+            std::cout << "Parando monitoramento de apps para: " << deviceId << std::endl;
+        } else if (action == "get_stats") {
+            std::cout << "Solicitando estatísticas de apps para: " << deviceId << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "Erro ao processar comando de monitoramento: " << e.what() << std::endl;
+    }
+}
+
+void StreamServer::handleScreenLockCommand(const std::string& commandMessage) {
+    // Processar comandos de bloqueio de tela
+    std::cout << "Comando de bloqueio de tela: " << commandMessage << std::endl;
+
+    try {
+        std::string action = extractJsonValue(commandMessage, "action");
+        std::string deviceId = "android_device"; // TODO: Obter do contexto
+
+        if (action == "lock") {
+            std::cout << "Bloqueando tela do dispositivo: " << deviceId << std::endl;
+        } else if (action == "unlock") {
+            std::cout << "Desbloqueando tela do dispositivo: " << deviceId << std::endl;
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "Erro ao processar comando de bloqueio: " << e.what() << std::endl;
+    }
+}
+
+void StreamServer::broadcastVideoFrame(const StreamData& frameData) {
+    // Broadcast frame para todos os dashboards conectados
+    // TODO: Implementar broadcasting real via WebSocket
+    std::cout << "Broadcasting video frame: " << frameData.frameData.size() << " bytes" << std::endl;
+}
+
+std::string StreamServer::extractJsonValue(const std::string& json, const std::string& key) {
+    // Extração simplificada de valores JSON (em produção usar biblioteca adequada)
+    std::string searchKey = "\"" + key + "\":";
+    size_t keyPos = json.find(searchKey);
+    if (keyPos == std::string::npos) return "";
+
+    size_t valueStart = json.find_first_of("\"", keyPos + searchKey.length());
+    if (valueStart == std::string::npos) return "";
+
+    size_t valueEnd = json.find_first_of("\"", valueStart + 1);
+    if (valueEnd == std::string::npos) return "";
+
+    return json.substr(valueStart + 1, valueEnd - valueStart - 1);
+}
+
+std::vector<uint8_t> StreamServer::base64Decode(const std::string& input) {
+    // Decodificação Base64 simplificada (em produção usar biblioteca)
+    // TODO: Implementar decodificação Base64 real
+    std::vector<uint8_t> result;
+    result.reserve(input.size());
+    for (char c : input) {
+        result.push_back(static_cast<uint8_t>(c));
+    }
+    return result;
 }
 
 void StreamServer::handleControlMessage(const std::string& controlMessage) {
