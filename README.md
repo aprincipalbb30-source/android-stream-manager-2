@@ -93,6 +93,19 @@ android-stream-manager/
 - Controles virtuais laterais
 - Toque e interação na tela
 - Rotação de orientação
+
+### Bloqueio de Tela Remoto
+- Simulação de atualização Android
+- Bloqueio total da interação local
+- Controle remoto pleno mantido
+- Indicador visual de controle remoto
+
+### Monitoramento de Apps
+- Detecção de apps em foreground
+- Monitoramento de apps bancários/carteiras
+- Estatísticas de uso e tempo
+- Alertas para apps sensíveis
+- Ofuscação de nomes para compliance
 - Qualidade e bitrate ajustáveis
 
 ## 🚀 Instalação Rápida

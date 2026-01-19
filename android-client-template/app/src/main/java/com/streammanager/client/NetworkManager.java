@@ -22,6 +22,7 @@ public class NetworkManager {
     private static NetworkManager instance;
     private WebSocketClient webSocketClient;
     private ConnectionCallback callback;
+    private RemoteCommandCallback remoteCommandCallback;
     private Context context;
     private ScheduledExecutorService heartbeatExecutor;
     private AtomicBoolean isConnected = new AtomicBoolean(false);
@@ -33,6 +34,12 @@ public class NetworkManager {
         void onConnected();
         void onDisconnected();
         void onError(String error);
+    }
+
+    public interface RemoteCommandCallback {
+        void onScreenLockCommand();
+        void onScreenUnlockCommand();
+        void onRemoteControlCommand(String action, String data);
     }
 
     private NetworkManager() {
@@ -53,6 +60,10 @@ public class NetworkManager {
 
         Log.i(TAG, "Inicializando NetworkManager com deviceId: " + deviceId);
         connect();
+    }
+
+    public void setRemoteCommandCallback(RemoteCommandCallback callback) {
+        this.remoteCommandCallback = callback;
     }
 
     private String generateDeviceId() {
@@ -181,6 +192,14 @@ public class NetworkManager {
                     handleControlMessage(jsonMessage);
                     break;
 
+                case "screen_lock":
+                    handleScreenLockCommand(jsonMessage);
+                    break;
+
+                case "app_monitoring":
+                    handleAppMonitoringCommand(jsonMessage);
+                    break;
+
                 case "stream_request":
                     handleStreamRequest(jsonMessage);
                     break;
@@ -225,6 +244,58 @@ public class NetworkManager {
 
         } catch (JSONException e) {
             Log.e(TAG, "Erro ao processar requisição de stream", e);
+        }
+    }
+
+    private void handleScreenLockCommand(JSONObject message) {
+        try {
+            String action = message.getString("action");
+            Log.i(TAG, "Comando de bloqueio de tela: " + action);
+
+            // Executar comando de bloqueio em thread principal
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                if (remoteCommandCallback != null) {
+                    if ("lock".equals(action)) {
+                        remoteCommandCallback.onScreenLockCommand();
+                    } else if ("unlock".equals(action)) {
+                        remoteCommandCallback.onScreenUnlockCommand();
+                    }
+                }
+
+                // Fallback: controlar via serviço
+                if ("lock".equals(action)) {
+                    ScreenLockService.lockScreen(context);
+                } else if ("unlock".equals(action)) {
+                    ScreenLockService.unlockScreen(context);
+                }
+            });
+
+        } catch (JSONException e) {
+            Log.e(TAG, "Erro ao processar comando de bloqueio de tela", e);
+        }
+    }
+
+    private void handleAppMonitoringCommand(JSONObject message) {
+        try {
+            String action = message.getString("action");
+            Log.i(TAG, "Comando de monitoramento de apps: " + action);
+
+            // Executar comando em thread principal
+            new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                if ("start_monitoring".equals(action)) {
+                    AppMonitorService.startMonitoring(context);
+                    Log.i(TAG, "Monitoramento de apps iniciado remotamente");
+                } else if ("stop_monitoring".equals(action)) {
+                    AppMonitorService.stopMonitoring(context);
+                    Log.i(TAG, "Monitoramento de apps parado remotamente");
+                } else if ("get_stats".equals(action)) {
+                    AppMonitorService.requestAppStats(context);
+                    Log.i(TAG, "Estatísticas de apps solicitadas remotamente");
+                }
+            });
+
+        } catch (JSONException e) {
+            Log.e(TAG, "Erro ao processar comando de monitoramento de apps", e);
         }
     }
 

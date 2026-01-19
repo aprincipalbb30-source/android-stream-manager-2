@@ -159,4 +159,19 @@
 
     </LinearLayout>
 
+    <!-- Botão de bloqueio de tela -->
+    <Button
+        android:id="@+id/lock_screen_button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="🔒 Bloquear Tela (Teste)"
+        android:textColor="@android:color/white"
+        android:background="@drawable/lock_button_background"
+        android:layout_marginTop="16dp"
+        android:padding="12dp"
+        android:textSize="16sp"
+        android:textStyle="bold" />
+
+</LinearLayout>
+
 </LinearLayout>

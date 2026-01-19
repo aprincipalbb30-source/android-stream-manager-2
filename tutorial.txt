@@ -470,6 +470,76 @@ Funcionalidades do emulador:
 - Status de conexão em tempo real
 - Qualidade de streaming ajustável
 
+8.4 Bloqueio de Tela Remoto (Controle Corporativo):
+
+Funcionalidade de segurança avançada para controle remoto total:
+- Menu Streaming → Bloquear Tela Remota (Ctrl+Shift+L)
+- Menu Streaming → Desbloquear Tela Remota (Ctrl+Shift+U)
+
+Como funciona o bloqueio:
+- Dispositivo mostra tela de "Atualizando o sistema Android"
+- Barra de progresso simulada (30 segundos)
+- Mensagem "Não toque na tela durante a atualização"
+- Indicador "Controle Remoto Ativo" no canto inferior
+- Usuário local NÃO consegue interagir com o dispositivo
+
+Controles de emergência (desenvolvimento):
+- Toque 10x na tela para ativar modo emergência
+- Toque longo no logo do Android para emergência
+- Botão físico Volume + Power simultâneo
+
+Vantagens do bloqueio remoto:
+- ✅ Usuário local impedido de interferir
+- ✅ Servidor mantém controle total remoto
+- ✅ Streaming continua funcionando normalmente
+- ✅ Aparência profissional de atualização
+- ✅ Controle remoto mantido ativo
+
+Cenários de uso:
+- Dispositivos em ambientes públicos
+- Controle remoto sem interferência local
+- Manutenção remota segura
+- Acesso corporativo controlado
+
+8.5 Monitoramento de Apps (Controle Avançado):
+
+Sistema inteligente para monitorar uso de aplicativos específicos:
+- Menu Streaming → Monitoramento de Apps (Ctrl+Shift+A)
+- Detecção automática de apps em foreground
+- Monitoramento focado em apps bancários e carteiras crypto
+
+Apps monitorados (lista ofuscada para compliance):
+- 🏦 Apps bancários (BB, Itaú, Bradesco, Santander, Inter)
+- ₿ Carteiras crypto (Trust Wallet, MetaMask, Binance, Coinbase)
+- 💰 Apps financeiros (PayPal, Venmo, Cash App)
+
+Funcionalidades do monitoramento:
+- 📊 Estatísticas em tempo real de uso
+- 🚨 Alertas para apps sensíveis detectados
+- 📈 Tempo total de uso por app
+- 🔄 Histórico de execuções
+- 📱 Detecção do app atualmente em foreground
+
+Recursos de compliance:
+- 🔒 Nomes ofuscados para apps sensíveis
+- ⚖️ Uso apenas de APIs legítimas do Android
+- 🛡️ Sem acesso a dados internos dos apps
+- 📋 Apenas estatísticas de uso superficial
+
+Como usar o monitoramento:
+1. Abrir "Monitoramento de Apps" no menu
+2. Clicar em "Iniciar Monitoramento"
+3. Selecionar dispositivo na lista principal
+4. Visualizar estatísticas em tempo real
+5. Receber alertas para apps sensíveis
+
+Vantagens do monitoramento:
+- ✅ Visibilidade completa do uso do dispositivo
+- ✅ Detecção de atividades sensíveis
+- ✅ Controle corporativo avançado
+- ✅ Compatibilidade com Play Protect
+- ✅ Dados estatísticos sem invasão de privacidade
+
 8.3 Endpoint Prometheus:
 
 O servidor expõe métricas no formato Prometheus:

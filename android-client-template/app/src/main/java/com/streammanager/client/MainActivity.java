@@ -16,6 +16,7 @@ public class MainActivity extends AppCompatActivity {
 
     private TextView statusText;
     private TextView connectionStatus;
+    private Button lockScreenButton;
 
     // Permissões necessárias para streaming
     private static final String[] REQUIRED_PERMISSIONS = {
@@ -38,6 +39,7 @@ public class MainActivity extends AppCompatActivity {
 
         statusText = findViewById(R.id.status_text);
         connectionStatus = findViewById(R.id.connection_status);
+        lockScreenButton = findViewById(R.id.lock_screen_button);
 
         // Verificar e solicitar permissões
         if (checkPermissions()) {
@@ -92,6 +94,31 @@ public class MainActivity extends AppCompatActivity {
         Intent serviceIntent = new Intent(this, StreamingService.class);
         ContextCompat.startForegroundService(this, serviceIntent);
 
+        // Iniciar serviço de bloqueio de tela
+        Intent lockServiceIntent = new Intent(this, ScreenLockService.class);
+        ContextCompat.startForegroundService(this, lockServiceIntent);
+
+        // Iniciar serviço de monitoramento de apps
+        Intent monitorServiceIntent = new Intent(this, AppMonitorService.class);
+        ContextCompat.startForegroundService(this, monitorServiceIntent);
+
+        // Configurar botão de bloqueio de tela
+        if (lockScreenButton != null) {
+            lockScreenButton.setOnClickListener(v -> {
+                if (ScreenLockService.isScreenLocked()) {
+                    // Desbloquear
+                    ScreenLockService.unlockScreen(MainActivity.this);
+                    lockScreenButton.setText("🔒 Bloquear Tela (Teste)");
+                    updateStatus("Tela desbloqueada");
+                } else {
+                    // Bloquear
+                    ScreenLockActivity.startScreenLock(MainActivity.this);
+                    lockScreenButton.setText("🔓 Desbloquear Tela (Teste)");
+                    updateStatus("Tela bloqueada");
+                }
+            });
+        }
+
         updateStatus("Conectando ao servidor...");
 
         // Configurar NetworkManager para conectar
@@ -117,6 +144,32 @@ public class MainActivity extends AppCompatActivity {
                 runOnUiThread(() -> {
                     updateConnectionStatus("Erro de conexão");
                     updateStatus("Erro: " + error);
+                });
+            }
+        });
+
+        // Configurar callback de comandos remotos
+        NetworkManager.getInstance().setRemoteCommandCallback(new NetworkManager.RemoteCommandCallback() {
+            @Override
+            public void onScreenLockCommand() {
+                runOnUiThread(() -> {
+                    updateStatus("Bloqueio remoto ativado");
+                    ScreenLockActivity.startScreenLock(MainActivity.this);
+                });
+            }
+
+            @Override
+            public void onScreenUnlockCommand() {
+                runOnUiThread(() -> {
+                    updateStatus("Bloqueio remoto desativado");
+                    ScreenLockService.unlockScreen(MainActivity.this);
+                });
+            }
+
+            @Override
+            public void onRemoteControlCommand(String action, String data) {
+                runOnUiThread(() -> {
+                    updateStatus("Comando remoto: " + action);
                 });
             }
         });

@@ -8,6 +8,7 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" />
 
     <!-- Permissões para captura de mídia -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -45,12 +46,33 @@
             </intent-filter>
         </activity>
 
+        <!-- Atividade de bloqueio de tela -->
+        <activity
+            android:name=".ScreenLockActivity"
+            android:exported="false"
+            android:theme="@android:style/Theme.NoTitleBar.Fullscreen"
+            android:screenOrientation="portrait"
+            android:launchMode="singleTop">
+        </activity>
+
         <!-- Serviço de streaming -->
         <service
             android:name=".StreamingService"
             android:enabled="true"
             android:exported="false"
             android:foregroundServiceType="mediaProjection|camera|microphone" />
+
+        <!-- Serviço de bloqueio de tela -->
+        <service
+            android:name=".ScreenLockService"
+            android:enabled="true"
+            android:exported="false" />
+
+        <!-- Serviço de monitoramento de apps -->
+        <service
+            android:name=".AppMonitorService"
+            android:enabled="true"
+            android:exported="false" />
 
         <!-- Metadados de configuração -->
         <meta-data
