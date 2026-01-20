@@ -2,7 +2,7 @@
 # Build simplificado para desenvolvimento
 
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -pthread -fPIC
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -pthread -fPIC -Icore -Ishared -Isecurity -Ioptimization -Icompliance
 LDFLAGS = -pthread -lssl -lcrypto -lz -llz4 -lzip
 
 # Diretórios
