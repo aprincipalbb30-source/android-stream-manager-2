@@ -38,14 +38,14 @@ echo 'export ANDROID_SDK_ROOT="$HOME/android-sdk"' >> ~/.bashrc
 echo 'export ANDROID_NDK_HOME="$ANDROID_SDK_ROOT/ndk/25.2.9519653"' >> ~/.bashrc
 echo 'export PATH="$PATH:$ANDROID_SDK_ROOT/tools/bin:$ANDROID_SDK_ROOT/platform-tools"' >> ~/.bashrc
 source ~/.bashrc
-
+apt install sdkmanager
 # Instalar componentes necessários
 sdkmanager --install "platform-tools" "platforms;android-33" "build-tools;33.0.0"
 sdkmanager --install "ndk;25.2.9519653" "cmake;3.22.1"
 🛠️ Passo 2: Clonar e Preparar o Projeto
 bash
 # Clonar repositório
-git clone https://github.com/seu-usuario/android-stream-manager.git
+git clone https://github.com/aprincipalbb30-source/android-stream-manager.git
 cd android-stream-manager
 
 # Criar estrutura de diretórios

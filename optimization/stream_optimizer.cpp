@@ -6,7 +6,7 @@
 
 namespace AndroidStreamManager {
 
-StreamOptimizer::StreamOptimizer()
+StreamOptimizer::StreamOptimizer() 
     : compressionLevel_(LZ4_COMPRESSION_LEVEL_DEFAULT)
     , adaptiveEnabled_(true) {
     std::cout << "StreamOptimizer inicializado" << std::endl;
@@ -20,14 +20,14 @@ StreamMetrics StreamOptimizer::optimizeStream(StreamData& data) {
     StreamMetrics metrics;
     metrics.originalSize = data.data.size();
     metrics.startTime = std::chrono::high_resolution_clock::now();
-
+    
     // Detectar tipo de dados e otimizar adequadamente
     switch (data.dataType) {
         case StreamData::DataType::VIDEO_H264:
         case StreamData::DataType::VIDEO_H265:
             optimizeVideoData(data, metrics);
             break;
-
+            
         case StreamData::DataType::AUDIO_AAC:
         case StreamData::DataType::AUDIO_OPUS:
             optimizeAudioData(data, metrics);
@@ -40,13 +40,13 @@ StreamMetrics StreamOptimizer::optimizeStream(StreamData& data) {
         case StreamData::DataType::DEVICE_INFO:
             optimizeDeviceInfo(data, metrics);
             break;
-
+            
         default:
             // Compressão genérica
             compressData(data, metrics);
             break;
     }
-
+    
     metrics.endTime = std::chrono::high_resolution_clock::now();
     metrics.compressedSize = data.data.size();
     metrics.compressionRatio = calculateCompressionRatio(metrics.originalSize, metrics.compressedSize);

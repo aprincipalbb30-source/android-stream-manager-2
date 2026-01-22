@@ -2,7 +2,7 @@
 # Build simplificado para desenvolvimento
 
 CXX = g++
-CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -pthread -fPIC -Icore -Ishared -Isecurity -Ioptimization -Icompliance
+CXXFLAGS = -std=c++17 -Wall -Wextra -O2 -pthread -fPIC -Icore -Ishared -Isecurity -Ioptimization -Icompliance -I./_deps/jwt_cpp-src/include
 LDFLAGS = -pthread -lssl -lcrypto -lz -llz4 -lzip
 
 # Diretórios

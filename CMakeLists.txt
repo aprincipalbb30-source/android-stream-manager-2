@@ -56,10 +56,12 @@ if(NOT LIBZIP_LIBRARY)
 endif()
 
 # JWT (tentar encontrar)
-find_library(JWT_LIBRARY NAMES jwt libjwt)
-if(NOT JWT_LIBRARY)
-    message(WARNING "JWT library not found - authentication features will be limited")
-endif()
+FetchContent_Declare(
+    jwt_cpp
+    GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
+    GIT_TAG        v0.4.0 # Ou a versão mais recente/estável
+)
+FetchContent_MakeAvailable(jwt_cpp)
 
 # Configurações específicas da plataforma
 if(WIN32)
@@ -93,7 +95,7 @@ add_library(security_lib STATIC
 target_link_libraries(security_lib
     OpenSSL::SSL
     OpenSSL::Crypto
-    ${JWT_LIBRARY}
+    jwt-cpp::jwt
     ${PLATFORM_LIBS}
 )
 
@@ -221,12 +223,6 @@ if(BUILD_SERVER)
     )
 endif()
 
-# Servidor (se implementado)
-if(BUILD_SERVER)
-    # TODO: Implementar servidor principal
-    message(STATUS "Server component - TODO")
-endif()
-
 # Testes
 if(BUILD_TESTS)
     enable_testing()
@@ -235,7 +231,7 @@ if(BUILD_TESTS)
     find_package(GTest)
 
     if(GTest_FOUND)
-        add_executable(unit_tests
+            add_executable(unit_tests
             tests/test_system_manager.cpp
             tests/test_apk_builder.cpp
             tests/test_stream_optimizer.cpp
@@ -246,6 +242,9 @@ if(BUILD_TESTS)
             GTest::GTest
             GTest::Main
         )
+        add_test(NAME unit_tests COMMAND unit_tests)
+    else()
+        message(WARNING "Google Test not found - unit tests will not be built")
     endif()
 
     # Teste de streaming
@@ -256,11 +255,6 @@ if(BUILD_TESTS)
     target_link_libraries(test_streaming
         core_lib
     )
-
-        add_test(NAME unit_tests COMMAND unit_tests)
-    else()
-        message(WARNING "Google Test not found - tests will not be built")
-    endif()
 endif()
 
 # Instalação
