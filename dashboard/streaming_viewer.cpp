@@ -62,6 +62,7 @@ StreamingViewer::StreamingViewer(QWidget *parent)
 
 StreamingViewer::~StreamingViewer() {
     stopStreaming();
+    cleanupFFmpegDecoder();
 }
 
 void StreamingViewer::setupUI() {
@@ -470,11 +471,12 @@ void StreamingViewer::decodeH264Frame(const QByteArray& encodedData, qint64 time
         std::vector<uint8_t> frameData(encodedData.begin(), encodedData.end());
 
         // Simular decodificação H.264 - em produção usar FFmpeg
-        QImage decodedFrame = decodeH264ToQImage(frameData, width, height, isKeyFrame);
+        // QImage decodedFrame = decodeH264ToQImage(frameData, width, height, isKeyFrame);
+        QImage decodedFrame = decodeWithFFmpeg(frameData);
 
         if (!decodedFrame.isNull()) {
             // Atualizar frame atual
-            currentFrame_ = decodedFrame;
+            currentFrame_ = decodedFrame.copy(); // Fazer uma cópia para segurança de thread
             deviceResolution_ = QSize(width, height);
 
             // Atualizar resolução de display proporcionalmente
@@ -503,108 +505,6 @@ void StreamingViewer::decodeH264Frame(const QByteArray& encodedData, qint64 time
     }
 }
 
-QImage StreamingViewer::decodeH264ToQImage(const std::vector<uint8_t>& h264Data, int width, int height, bool isKeyFrame) {
-    try {
-        if (h264Data.empty() || width <= 0 || height <= 0) {
-            return QImage();
-        }
-
-        // IMPLEMENTAÇÃO SIMPLIFICADA MAS FUNCIONAL
-        // Em produção completa, usar FFmpeg/QtAV para decodificação H.264 real
-
-        QImage decodedFrame(width, height, QImage::Format_RGB32);
-        decodedFrame.fill(Qt::black); // Fundo padrão
-
-        // Análise básica dos dados H.264 para extrair informações visuais
-        if (h264Data.size() > 100) { // Frame com dados suficientes
-            QPainter painter(&decodedFrame);
-            painter.setRenderHint(QPainter::Antialiasing);
-
-            // Extrair "informações" dos dados H.264 (simplificado)
-            quint32 hash1 = qHash(QByteArray(reinterpret_cast<const char*>(h264Data.data()), h264Data.size()));
-            quint32 hash2 = qHash(QByteArray(reinterpret_cast<const char*>(&h264Data[0] + h264Data.size()/2), h264Data.size()/2));
-
-            if (isKeyFrame) {
-                // Keyframe: mostrar elementos estruturais
-                painter.fillRect(0, 0, width, height, QColor(15, 15, 35));
-
-                // Desenhar elementos baseados no conteúdo H.264
-                for (int i = 0; i < 8; ++i) {
-                    int x = (hash1 + i * 97) % (width - 40);
-                    int y = (hash2 + i * 113) % (height - 40);
-                    int w = 20 + ((hash1 >> (i*2)) % 40);
-                    int h = 20 + ((hash2 >> (i*3)) % 40);
-
-                    QColor color(
-                        50 + ((hash1 + i * 23) % 150),
-                        50 + ((hash2 + i * 41) % 150),
-                        100 + ((hash1 + hash2 + i * 67) % 155)
-                    );
-
-                    painter.fillRect(x, y, w, h, color);
-                }
-
-                // Adicionar texto informativo
-                painter.setPen(Qt::white);
-                painter.setFont(QFont("Arial", 10));
-                painter.drawText(10, height - 30, QString("H.264 Keyframe - %1 bytes").arg(h264Data.size()));
-
-            } else {
-                // P-frame: mostrar movimento/diferenças
-                painter.fillRect(0, 0, width, height, QColor(5, 5, 15));
-
-                // Simular movimento baseado nos dados
-                int timeOffset = frameCount_ % 100;
-                for (int i = 0; i < 6; ++i) {
-                    int baseX = (hash1 + i * 73) % width;
-                    int baseY = (hash2 + i * 89) % height;
-                    int x = (baseX + timeOffset * 2) % width;
-                    int y = (baseY + timeOffset) % height;
-                    int size = 12 + ((hash1 + hash2) % 15);
-
-                    QColor color(
-                        80 + ((hash1 >> 8) % 100),
-                        80 + ((hash2 >> 8) % 100),
-                        150 + ((hash1 + hash2) % 105)
-                    );
-
-                    painter.setBrush(color);
-                    painter.drawEllipse(x, y, size, size);
-                }
-
-                // Adicionar texto informativo
-                painter.setPen(QColor(200, 200, 255));
-                painter.setFont(QFont("Arial", 8));
-                painter.drawText(10, height - 20, QString("H.264 P-frame - %1 bytes").arg(h264Data.size()));
-            }
-
-            painter.end();
-        } else {
-            // Frame muito pequeno - mostrar indicador simples
-            QPainter painter(&decodedFrame);
-            painter.setPen(Qt::white);
-            painter.setFont(QFont("Arial", 12));
-            painter.drawText(width/2 - 50, height/2, "Frame H.264");
-            painter.drawText(width/2 - 30, height/2 + 20, QString("%1 bytes").arg(h264Data.size()));
-            painter.end();
-        }
-
-        return decodedFrame;
-
-    } catch (const std::exception& e) {
-        qWarning() << "Erro na decodificação H.264:" << e.what();
-        // Retornar frame de erro
-        QImage errorFrame(width, height, QImage::Format_RGB32);
-        errorFrame.fill(Qt::red);
-        QPainter painter(&errorFrame);
-        painter.setPen(Qt::white);
-        painter.setFont(QFont("Arial", 10));
-        painter.drawText(10, height/2, "Erro na decodificação");
-        painter.end();
-        return errorFrame;
-    }
-}
-
 void StreamingViewer::updateDisplayResolution(int frameWidth, int frameHeight) {
     QRect displayRect = getDeviceDisplayRect();
     double aspectRatio = (double)frameWidth / frameHeight;
@@ -620,40 +520,120 @@ void StreamingViewer::updateDisplayResolution(int frameWidth, int frameHeight) {
     displayResolution_ = QSize(displayWidth, displayHeight);
 }
 
-// Método para inicializar decoder FFmpeg (estrutura para implementação futura)
 bool StreamingViewer::initializeFFmpegDecoder(int width, int height) {
-    // TODO: Implementar inicialização real do FFmpeg
-    //
-    // Estrutura necessária:
-    // 1. avcodec_register_all()
-    // 2. avcodec_find_decoder(AV_CODEC_ID_H264)
-    // 3. avcodec_alloc_context3(codec)
-    // 4. Configurar contexto (width, height, pix_fmt)
-    // 5. avcodec_open2(context, codec, NULL)
-    // 6. Alocar AVFrame para output
+    // Se o contexto já existe e a resolução não mudou, não faz nada
+    if (codecContext_ && codecContext_->width == width && codecContext_->height == height) {
+        return true;
+    }
 
-    qDebug() << "FFmpeg decoder initialization placeholder - width:" << width << "height:" << height;
+    // Limpar decoder antigo se existir
+    cleanupFFmpegDecoder();
+
+    qDebug() << "Initializing FFmpeg H.264 decoder for" << width << "x" << height;
+
+    codec_ = avcodec_find_decoder(AV_CODEC_ID_H264);
+    if (!codec_) {
+        qWarning() << "FFmpeg H.264 decoder not found";
+        return false;
+    }
+
+    codecContext_ = avcodec_alloc_context3(codec_);
+    if (!codecContext_) {
+        qWarning() << "Failed to allocate FFmpeg codec context";
+        return false;
+    }
+
+    // Opcional: permitir que o decoder use múltiplas threads
+    codecContext_->thread_count = std::thread::hardware_concurrency();
+
+    if (avcodec_open2(codecContext_, codec_, nullptr) < 0) {
+        qWarning() << "Failed to open FFmpeg codec";
+        cleanupFFmpegDecoder();
+        return false;
+    }
+
+    frame_ = av_frame_alloc();
+    rgbFrame_ = av_frame_alloc();
+    packet_ = av_packet_alloc();
+
+    if (!frame_ || !rgbFrame_ || !packet_) {
+        qWarning() << "Failed to allocate FFmpeg frames or packet";
+        cleanupFFmpegDecoder();
+        return false;
+    }
+
+    // Preparar buffer para o frame RGB
+    int numBytes = av_image_get_buffer_size(AV_PIX_FMT_RGB32, width, height, 1);
+    rgbBuffer_.resize(numBytes);
+    av_image_fill_arrays(rgbFrame_->data, rgbFrame_->linesize, rgbBuffer_.data(), AV_PIX_FMT_RGB32, width, height, 1);
+
+    // Preparar contexto de conversão de cores (YUV -> RGB)
+    swsContext_ = sws_getContext(width, height, codecContext_->pix_fmt,
+                                 width, height, AV_PIX_FMT_RGB32,
+                                 SWS_BILINEAR, nullptr, nullptr, nullptr);
+    if (!swsContext_) {
+        qWarning() << "Failed to create SwsContext for color conversion";
+        cleanupFFmpegDecoder();
+        return false;
+    }
+
+    qDebug() << "FFmpeg decoder initialized successfully.";
     return true;
 }
 
-// Método para decodificar frame com FFmpeg (estrutura para implementação futura)
-QImage StreamingViewer::decodeWithFFmpeg(const std::vector<uint8_t>& h264Data) {
-    // TODO: Implementar decodificação real FFmpeg
-    //
-    // Estrutura necessária:
-    // 1. Criar AVPacket com dados H.264
-    // 2. avcodec_send_packet(context, packet)
-    // 3. avcodec_receive_frame(context, frame)
-    // 4. Converter YUV420 para RGB
-    // 5. Criar QImage
+void StreamingViewer::cleanupFFmpegDecoder() {
+    if (swsContext_) sws_freeContext(swsContext_);
+    if (codecContext_) avcodec_free_context(&codecContext_);
+    if (frame_) av_frame_free(&frame_);
+    if (rgbFrame_) av_frame_free(&rgbFrame_);
+    if (packet_) av_packet_free(&packet_);
 
-    qDebug() << "FFmpeg frame decoding placeholder - size:" << h264Data.size();
+    swsContext_ = nullptr;
+    codecContext_ = nullptr;
+    frame_ = nullptr;
+    rgbFrame_ = nullptr;
+    packet_ = nullptr;
+}
+
+QImage StreamingViewer::decodeWithFFmpeg(const std::vector<uint8_t>& h264Data) {
+    if (!codecContext_ || h264Data.empty()) {
+        return QImage();
+    }
+
+    packet_->data = const_cast<uint8_t*>(h264Data.data());
+    packet_->size = h264Data.size();
+
+    if (avcodec_send_packet(codecContext_, packet_) < 0) {
+        qWarning() << "Error sending a packet for decoding";
+        return QImage();
+    }
+
+    int ret = avcodec_receive_frame(codecContext_, frame_);
+    if (ret == 0) {
+        // Frame decodificado com sucesso, converter para QImage
+        return avFrameToQImage(frame_);
+    } else if (ret != AVERROR(EAGAIN) && ret != AVERROR_EOF) {
+        qWarning() << "Error during decoding:" << ret;
+    }
+
     return QImage();
 }
 
 // Método para conectar sinais de vídeo do servidor (futuro)
 void StreamingViewer::initializeWebSocket() {
     webSocket_ = new QWebSocket(QStringLiteral("AndroidStreamManager"), QWebSocketProtocol::VersionLatest, this);
+
+    // Inicializar FFmpeg (apenas o registro de codecs)
+    // av_register_all() e avcodec_register_all() são obsoletos.
+    // A inicialização agora é feita sob demanda.
+
+    // Verificar se a resolução já é conhecida para inicializar o decoder
+    if (deviceResolution_.width() > 0 && deviceResolution_.height() > 0) {
+        if (!initializeFFmpegDecoder(deviceResolution_.width(), deviceResolution_.height())) {
+            qWarning() << "Falha ao inicializar o decodificador FFmpeg na inicialização.";
+            // O sistema tentará inicializar novamente quando o primeiro frame chegar.
+        }
+    }
 
     connect(webSocket_, &QWebSocket::connected, this, &StreamingViewer::onWebSocketConnected);
     connect(webSocket_, &QWebSocket::disconnected, this, &StreamingViewer::onWebSocketDisconnected);
@@ -662,6 +642,19 @@ void StreamingViewer::initializeWebSocket() {
     connect(webSocket_, &QWebSocket::textMessageReceived, this, &StreamingViewer::onWebSocketMessageReceived);
 
     serverUrl_ = "ws://localhost:8443"; // Default server URL
+}
+
+QImage StreamingViewer::avFrameToQImage(AVFrame* frame) {
+    if (!frame || !swsContext_) {
+        return QImage();
+    }
+
+    // Converter de YUV (ou outro formato) para RGB32
+    sws_scale(swsContext_, (const uint8_t* const*)frame->data, frame->linesize, 0, frame->height,
+              rgbFrame_->data, rgbFrame_->linesize);
+
+    // Criar QImage a partir do buffer RGB
+    return QImage(rgbBuffer_.data(), frame->width, frame->height, QImage::Format_RGB32);
 }
 
 void StreamingViewer::connectToVideoStream() {

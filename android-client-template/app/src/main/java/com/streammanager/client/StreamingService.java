@@ -62,6 +62,11 @@ public class StreamingService extends Service {
     private Handler encodingHandler;
     private HandlerThread encodingThread;
 
+    // Monitoramento de Bitrate Dinâmico
+    private Handler monitoringHandler;
+    private HandlerThread monitoringThread;
+    private Runnable bitrateAdjustmentRunnable;
+
     // Buffer Pooling para reduzir GC
     private static final int BITMAP_POOL_SIZE = 3;
     private final LinkedBlockingQueue<Bitmap> bitmapPool = new LinkedBlockingQueue<>();
@@ -97,6 +102,7 @@ public class StreamingService extends Service {
         initializeScreenCapture();
         initializeAudioCapture();
         initializeVideoEncoding();
+        initializeBitrateMonitoring();
         createNotificationChannel();
         startForeground(NOTIFICATION_ID, createNotification());
 
@@ -183,6 +189,29 @@ public class StreamingService extends Service {
 
         Log.i(TAG, "Video encoder initialized successfully: " + screenWidth + "x" + screenHeight +
               " @25fps, 1.5Mbps, Main profile");
+    }
+
+    private void initializeBitrateMonitoring() {
+        monitoringThread = new HandlerThread("BitrateMonitor");
+        monitoringThread.start();
+        monitoringHandler = new Handler(monitoringThread.getLooper());
+
+        bitrateAdjustmentRunnable = new Runnable() {
+            @Override
+            public void run() {
+                if (!isStreaming.get()) {
+                    return; // Para o runnable se o streaming parou
+                }
+
+                // Em um cenário real, obteríamos a qualidade da rede do NetworkManager
+                // (ex: baseado em latência, perda de pacotes, ou tipo de conexão).
+                // Aqui, simulamos uma qualidade de rede flutuante.
+                int networkQuality = 50 + (int)(Math.random() * 50); // Simula qualidade entre 50% e 100%
+                adjustVideoBitrate(networkQuality);
+
+                monitoringHandler.postDelayed(this, 5000); // Reagendar para daqui a 5 segundos
+            }
+        };
     }
 
     @Override
@@ -283,6 +312,9 @@ public class StreamingService extends Service {
         );
 
         Log.i(TAG, "Captura de tela real iniciada: " + screenWidth + "x" + screenHeight);
+
+        // Iniciar monitoramento de bitrate
+        monitoringHandler.post(bitrateAdjustmentRunnable);
     }
 
     private void stopScreenCapture() {
@@ -294,6 +326,10 @@ public class StreamingService extends Service {
         if (screenCaptureCallback != null) {
             screenCaptureCallback.release();
             screenCaptureCallback = null;
+        }
+
+        if (monitoringHandler != null && bitrateAdjustmentRunnable != null) {
+            monitoringHandler.removeCallbacks(bitrateAdjustmentRunnable);
         }
 
         // Parar encoder de vídeo
@@ -755,6 +791,12 @@ public class StreamingService extends Service {
 
         if (handlerThread != null) {
             handlerThread.quitSafely();
+        }
+
+        if (monitoringThread != null) {
+            monitoringThread.quitSafely();
+            monitoringHandler = null;
+            monitoringThread = null;
         }
 
         if (encodingThread != null) {

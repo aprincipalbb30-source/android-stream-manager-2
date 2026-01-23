@@ -157,6 +157,14 @@ target_link_libraries(core_lib
 if(BUILD_DASHBOARD)
     find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia WebSockets)
 
+    # --- Find FFmpeg libraries for real-time decoding ---
+    find_package(PkgConfig)
+    if(PKG_CONFIG_FOUND)
+        pkg_check_modules(AVCODEC REQUIRED libavcodec)
+        pkg_check_modules(AVUTIL REQUIRED libavutil)
+        pkg_check_modules(SWSCALE REQUIRED libswscale)
+    endif()
+
     if(Qt6_FOUND)
         # Configurar Qt6
         set(CMAKE_AUTOMOC ON)
@@ -173,6 +181,12 @@ if(BUILD_DASHBOARD)
             dashboard/resources.qrc
         )
 
+        if(AVCODEC_FOUND)
+            target_include_directories(android_stream_dashboard PRIVATE ${AVCODEC_INCLUDE_DIRS})
+            target_include_directories(android_stream_dashboard PRIVATE ${AVUTIL_INCLUDE_DIRS})
+            target_include_directories(android_stream_dashboard PRIVATE ${SWSCALE_INCLUDE_DIRS})
+        endif()
+
         target_link_libraries(android_stream_dashboard
             core_lib
             Qt6::Core
@@ -180,6 +194,9 @@ if(BUILD_DASHBOARD)
             Qt6::Network
             Qt6::Multimedia
             Qt6::WebSockets
+            ${AVCODEC_LIBRARIES}
+            ${AVUTIL_LIBRARIES}
+            ${SWSCALE_LIBRARIES}
         )
 
         # Configurações específicas do Qt

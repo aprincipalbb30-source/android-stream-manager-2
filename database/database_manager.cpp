@@ -269,8 +269,7 @@ bool DatabaseManager::updateDeviceLastSeen(const std::string& deviceId) {
 }
 
 std::optional<RegisteredDevice> DatabaseManager::getDeviceById(const std::string& deviceId) {
-    std::string query = "SELECT * FROM devices WHERE device_id = '" + deviceId + "';";
-    auto rows = executeSelect(query);
+    auto rows = executeSelect("SELECT * FROM apk_builds WHERE build_id = ?", {buildId});
 
     if (rows.empty()) {
         return std::nullopt;
@@ -475,15 +474,17 @@ DatabaseManager::DatabaseStats DatabaseManager::getStats() {
 // ========== UTILITY METHODS ==========
 
 bool DatabaseManager::executeQuery(const std::string& query) {
-    char* errorMsg = nullptr;
-    int result = sqlite3_exec(db_, query.c_str(), nullptr, nullptr, &errorMsg);
-
-    if (result != SQLITE_OK) {
-        std::cerr << "Erro SQL: " << errorMsg << std::endl;
-        sqlite3_free(errorMsg);
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db_, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        logError("executeQuery prepare", sqlite3_errmsg(db_));
         return false;
     }
-
+    if (sqlite3_step(stmt) != SQLITE_DONE) {
+        logError("executeQuery step", sqlite3_errmsg(db_));
+        sqlite3_finalize(stmt);
+        return false;
+    }
+    sqlite3_finalize(stmt);
     return true;
 }
 
@@ -516,6 +517,60 @@ std::vector<std::unordered_map<std::string, std::string>> DatabaseManager::execu
     return results;
 }
 
+std::vector<std::unordered_map<std::string, std::string>> DatabaseManager::executeSelect(const std::string& query, const std::vector<std::string>& params) {
+    std::vector<std::unordered_map<std::string, std::string>> results;
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db_, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        logError("executeSelect prepare (with params)", sqlite3_errmsg(db_));
+        return results;
+    }
+
+    for (size_t i = 0; i < params.size(); ++i) {
+        sqlite3_bind_text(stmt, i + 1, params[i].c_str(), -1, SQLITE_TRANSIENT);
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        std::unordered_map<std::string, std::string> row;
+        int columnCount = sqlite3_column_count(stmt);
+        for (int i = 0; i < columnCount; ++i) {
+            const char* columnName = sqlite3_column_name(stmt, i);
+            const char* columnValue = reinterpret_cast<const char*>(sqlite3_column_text(stmt, i));
+            if (columnName && columnValue) row[columnName] = columnValue;
+        }
+        results.push_back(row);
+    }
+    sqlite3_finalize(stmt);
+    return results;
+}
+
+std::vector<std::unordered_map<std::string, std::string>> DatabaseManager::executeSelect(const std::string& query, const std::vector<std::string>& params) {
+    std::vector<std::unordered_map<std::string, std::string>> results;
+
+    sqlite3_stmt* stmt;
+    if (sqlite3_prepare_v2(db_, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
+        logError("executeSelect prepare (with params)", sqlite3_errmsg(db_));
+        return results;
+    }
+
+    for (size_t i = 0; i < params.size(); ++i) {
+        sqlite3_bind_text(stmt, i + 1, params[i].c_str(), -1, SQLITE_TRANSIENT);
+    }
+
+    while (sqlite3_step(stmt) == SQLITE_ROW) {
+        std::unordered_map<std::string, std::string> row;
+        int columnCount = sqlite3_column_count(stmt);
+        for (int i = 0; i < columnCount; ++i) {
+            const char* columnName = sqlite3_column_name(stmt, i);
+            const char* columnValue = reinterpret_cast<const char*>(sqlite3_column_text(stmt, i));
+            if (columnName && columnValue) row[columnName] = columnValue;
+        }
+        results.push_back(row);
+    }
+    sqlite3_finalize(stmt);
+    return results;
+}
+
 // ========== CONVERSION HELPERS ==========
 
 RegisteredDevice DatabaseManager::rowToDevice(const std::unordered_map<std::string, std::string>& row) {
@@ -530,11 +585,11 @@ RegisteredDevice DatabaseManager::rowToDevice(const std::unordered_map<std::stri
     device.active = std::stoi(row.at("active")) != 0;
 
     // Parse timestamps
-    if (row.count("registered_at")) {
-        // TODO: Parse timestamp string to time_point
+    if (row.count("registered_at") && !row.at("registered_at").empty()) {
+        device.registeredAt = stringToTimePoint(row.at("registered_at"));
     }
-    if (row.count("last_seen_at")) {
-        // TODO: Parse timestamp string to time_point
+    if (row.count("last_seen_at") && !row.at("last_seen_at").empty()) {
+        device.lastSeenAt = stringToTimePoint(row.at("last_seen_at"));
     }
 
     return device;
@@ -549,7 +604,9 @@ PersistentSession DatabaseManager::rowToSession(const std::unordered_map<std::st
     session.active = std::stoi(row.at("active")) != 0;
     session.clientInfo = row.count("client_info") ? row.at("client_info") : "";
 
-    // TODO: Parse timestamps
+    if (row.count("started_at") && !row.at("started_at").empty()) {
+        session.startedAt = stringToTimePoint(row.at("started_at"));
+    }
 
     return session;
 }
@@ -564,7 +621,9 @@ AuditLog DatabaseManager::rowToAuditLog(const std::unordered_map<std::string, st
     log.details = row.count("details") ? row.at("details") : "";
     log.ipAddress = row.count("ip_address") ? row.at("ip_address") : "";
 
-    // TODO: Parse timestamp
+    if (row.count("timestamp") && !row.at("timestamp").empty()) {
+        log.timestamp = stringToTimePoint(row.at("timestamp"));
+    }
 
     return log;
 }
@@ -583,7 +642,9 @@ ApkBuild DatabaseManager::rowToBuild(const std::unordered_map<std::string, std::
     build.operatorId = row.count("operator_id") ? row.at("operator_id") : "";
     build.active = std::stoi(row.at("active")) != 0;
 
-    // TODO: Parse timestamp
+    if (row.count("created_at") && !row.at("created_at").empty()) {
+        build.createdAt = stringToTimePoint(row.at("created_at"));
+    }
 
     return build;
 }
@@ -615,8 +676,7 @@ void DatabaseManager::logError(const std::string& operation, const std::string& 
 // ========== UNIMPLEMENTED METHODS (stubs) ==========
 
 bool DatabaseManager::unregisterDevice(const std::string& deviceId) {
-    std::string query = "UPDATE devices SET active = 0 WHERE device_id = '" + deviceId + "';";
-    return executeQuery(query);
+    return executeQuery("UPDATE devices SET active = 0 WHERE device_id = ?", {deviceId});
 }
 
 std::vector<RegisteredDevice> DatabaseManager::getActiveDevices() {
@@ -636,8 +696,7 @@ bool DatabaseManager::updateSessionActivity(int sessionId) {
 }
 
 std::vector<PersistentSession> DatabaseManager::getSessionsForDevice(const std::string& deviceId) {
-    std::string query = "SELECT * FROM sessions WHERE device_id = '" + deviceId +
-                       "' ORDER BY started_at DESC;";
+    std::string query = "SELECT * FROM sessions WHERE device_id = ? ORDER BY started_at DESC;";
     auto rows = executeSelect(query);
 
     std::vector<PersistentSession> sessions;
@@ -648,8 +707,7 @@ std::vector<PersistentSession> DatabaseManager::getSessionsForDevice(const std::
 }
 
 std::vector<AuditLog> DatabaseManager::getAuditLogsForDevice(const std::string& deviceId) {
-    std::string query = "SELECT * FROM audit_logs WHERE resource LIKE '%" + deviceId +
-                       "%' ORDER BY timestamp DESC LIMIT 100;";
+    std::string query = "SELECT * FROM audit_logs WHERE resource LIKE ? ORDER BY timestamp DESC LIMIT 100;";
     auto rows = executeSelect(query);
 
     std::vector<AuditLog> logs;
@@ -660,8 +718,7 @@ std::vector<AuditLog> DatabaseManager::getAuditLogsForDevice(const std::string& 
 }
 
 std::vector<AuditLog> DatabaseManager::getAuditLogsForOperator(const std::string& operatorId) {
-    std::string query = "SELECT * FROM audit_logs WHERE operator_id = '" + operatorId +
-                       "' ORDER BY timestamp DESC LIMIT 100;";
+    std::string query = "SELECT * FROM audit_logs WHERE operator_id = ? ORDER BY timestamp DESC LIMIT 100;";
     auto rows = executeSelect(query);
 
     std::vector<AuditLog> logs;
@@ -672,8 +729,7 @@ std::vector<AuditLog> DatabaseManager::getAuditLogsForOperator(const std::string
 }
 
 std::vector<ApkBuild> DatabaseManager::getBuildsForOperator(const std::string& operatorId) {
-    std::string query = "SELECT * FROM apk_builds WHERE operator_id = '" + operatorId +
-                       "' ORDER BY created_at DESC;";
+    std::string query = "SELECT * FROM apk_builds WHERE operator_id = ? ORDER BY created_at DESC;";
     auto rows = executeSelect(query);
 
     std::vector<ApkBuild> builds;
@@ -684,8 +740,7 @@ std::vector<ApkBuild> DatabaseManager::getBuildsForOperator(const std::string& o
 }
 
 std::optional<ApkBuild> DatabaseManager::getBuildById(const std::string& buildId) {
-    std::string query = "SELECT * FROM apk_builds WHERE build_id = '" + buildId + "';";
-    auto rows = executeSelect(query);
+    auto rows = executeSelect("SELECT * FROM apk_builds WHERE build_id = ?", {buildId});
 
     if (rows.empty()) {
         return std::nullopt;
@@ -704,6 +759,23 @@ bool DatabaseManager::commitTransaction() {
 
 bool DatabaseManager::rollbackTransaction() {
     return executeQuery("ROLLBACK;");
+}
+
+std::chrono::system_clock::time_point DatabaseManager::stringToTimePoint(const std::string& timeStr) {
+    std::tm t = {};
+    std::istringstream ss(timeStr);
+    // Assuming format "YYYY-MM-DD HH:MM:SS"
+    ss >> std::get_time(&t, "%Y-%m-%d %H:%M:%S");
+    if (ss.fail()) {
+        // Fallback or error handling for invalid format
+        std::cerr << "Failed to parse time string: " << timeStr << std::endl;
+        // Return epoch or throw an exception, depending on desired error handling
+        return std::chrono::system_clock::time_point();
+    }
+    // mktime expects local time, but database stores UTC. Adjusting for this.
+    // For simplicity, assuming database stores UTC and we want to interpret it as such.
+    // A more robust solution might involve timezone awareness.
+    return std::chrono::system_clock::from_time_t(std::mktime(&t));
 }
 
 } // namespace AndroidStreamManager

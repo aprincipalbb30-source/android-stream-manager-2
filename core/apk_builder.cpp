@@ -4,9 +4,13 @@
 #include <filesystem>
 #include <sstream>
 #include <iomanip>
+#include <regex> // For string replacement
 #include <openssl/sha.h>
 #include <chrono>
 #include <thread>
+
+#include "security/apk_signer.h" // Assuming ApkSigner is available
+#include "shared/apk_config.h" // Ensure ApkConfig is included
 
 namespace AndroidStreamManager {
 
@@ -21,7 +25,7 @@ ApkBuilder::ApkBuilder(const std::string& androidSdkPath,
     std::cout << "Template Path: " << templatePath_ << std::endl;
 }
 
-ApkBuilder::~ApkBuilder() {
+ApkBuilder::~ApkBuilder() { // No changes needed here
     std::cout << "ApkBuilder destruído" << std::endl;
 }
 
@@ -53,47 +57,42 @@ BuildResult ApkBuilder::buildApk(const ApkConfig& config) {
             return result;
         }
 
-        // 4. Personalizar arquivos
-        if (!customizeFiles(buildDir, config)) {
-            result.errorMessage = "Falha ao personalizar arquivos";
+        // 4. Modificar template Android
+        if (!modifyAndroidTemplate(buildDir, config)) {
+            result.errorMessage = "Falha ao modificar template Android";
             return result;
         }
 
-        // 5. Compilar recursos
-        if (!compileResources(buildDir)) {
-            result.errorMessage = "Falha ao compilar recursos";
+        // 5. Executar Gradle para compilar o APK
+        std::string unsignedApkPath = executeGradleBuild(buildDir, config);
+        if (unsignedApkPath.empty()) {
+            result.errorMessage = "Falha na compilação do APK com Gradle";
             return result;
         }
 
-        // 6. Gerar bytecode
-        if (!generateBytecode(buildDir)) {
-            result.errorMessage = "Falha ao gerar bytecode";
+        // 6. Assinar o APK
+        std::string signedApkPath = signApk(unsignedApkPath, config, config.keystorePath, config.keystorePassword, config.keyAlias, config.keyPassword);
+        if (signedApkPath.empty()) {
+            result.errorMessage = "Falha ao assinar o APK";
             return result;
         }
 
-        // 7. Empacotar APK
-        std::string apkPath = packageApk(buildDir, config);
-        if (apkPath.empty()) {
-            result.errorMessage = "Falha ao empacotar APK";
-            return result;
-        }
-
-        // 8. Calcular hash do APK
-        result.sha256Hash = calculateSha256(apkPath);
+        // 7. Calcular hash do APK assinado
+        result.sha256Hash = calculateSha256(signedApkPath);
         if (result.sha256Hash.empty()) {
-            result.errorMessage = "Falha ao calcular hash SHA256";
+            result.errorMessage = "Falha ao calcular hash SHA256 do APK assinado";
             return result;
         }
 
-        // 9. Configurar resultado
+        // 8. Configurar resultado
         result.success = true;
-        result.apkPath = apkPath;
+        result.apkPath = signedApkPath;
         result.buildId = buildId;
         result.buildTime = std::chrono::system_clock::now();
 
-        std::cout << "Build concluído com sucesso: " << apkPath << std::endl;
+        std::cout << "Build concluído com sucesso: " << signedApkPath << std::endl;
 
-        // 10. Limpar arquivos temporários
+        // 9. Limpar arquivos temporários
         cleanup(buildDir);
 
     } catch (const std::exception& e) {
@@ -123,6 +122,19 @@ bool ApkBuilder::validateConfig(const ApkConfig& config) {
     if (config.targetSdkVersion < config.minSdkVersion) {
         std::cerr << "Versão target menor que versão mínima" << std::endl;
         return false;
+    }
+    
+    if (config.enableWebview && config.backgroundOnly) {
+        std::cerr << "Modo WebView e Background Only são mutuamente exclusivos." << std::endl;
+        return false;
+    }
+
+    if (config.enableWebview) {
+        // Basic URL validation
+        if (config.webviewUrl.empty() || !(config.webviewUrl.rfind("http://", 0) == 0 || config.webviewUrl.rfind("https://", 0) == 0)) {
+            std::cerr << "URL para WebView inválida. Deve começar com http:// ou https://." << std::endl;
+            return false;
+        }
     }
 
     return true;
@@ -183,10 +195,10 @@ bool ApkBuilder::copyTemplate(const std::string& buildDir, const ApkConfig& conf
     }
 }
 
-bool ApkBuilder::customizeFiles(const std::string& buildDir, const ApkConfig& config) {
+bool ApkBuilder::modifyAndroidTemplate(const std::string& buildDir, const ApkConfig& config) {
     // Personalizar AndroidManifest.xml
     if (!customizeManifest(buildDir, config)) {
-        return false;
+        return false; // Error already logged
     }
 
     // Personalizar build.gradle
@@ -197,8 +209,13 @@ bool ApkBuilder::customizeFiles(const std::string& buildDir, const ApkConfig& co
     // Personalizar strings.xml
     if (!customizeStrings(buildDir, config)) {
         return false;
-    }
+    }    
 
+    // Personalizar arquivos Java/Kotlin (ex: MainActivity, criar WebViewActivity)
+    if (!customizeJavaFiles(buildDir, config)) {
+        return false;
+    }
+    
     std::cout << "Arquivos personalizados" << std::endl;
     return true;
 }
@@ -220,12 +237,59 @@ bool ApkBuilder::customizeManifest(const std::string& buildDir, const ApkConfig&
         manifestFile.close();
 
         // Substituir placeholders
-        replaceAll(content, "{{PACKAGE_NAME}}", config.packageName);
-        replaceAll(content, "{{APP_NAME}}", config.appName);
-        replaceAll(content, "{{APP_ICON}}", config.iconPath.empty() ? "@android:drawable/ic_launcher" : config.iconPath);
-        replaceAll(content, "{{SERVER_CONFIG}}", generateServerConfig(config));
+        content = std::regex_replace(content, std::regex("package=\"[^\"]+\""), "package=\"" + config.packageName + "\"");
+        content = std::regex_replace(content, std::regex("android:label=\"@string/app_name\""), "android:label=\"" + config.appName + "\"");
+        
+        // Ícone
+        std::string iconRef = config.iconPath.empty() ? "@mipmap/ic_launcher" : "@drawable/" + std::filesystem::path(config.iconPath).stem().string(); // Assuming icon is copied to drawable
+        content = std::regex_replace(content, std::regex("android:icon=\"@mipmap/ic_launcher\""), "android:icon=\"" + iconRef + "\"");
+        content = std::regex_replace(content, std::regex("android:roundIcon=\"@mipmap/ic_launcher_round\""), "android:roundIcon=\"" + iconRef + "_round\""); // Assuming round icon also uses the same base name
 
-        // Adicionar permissões
+        // Configuração do servidor (pode ser injetada em strings.xml ou em código Java)
+        // replaceAll(content, "{{SERVER_CONFIG}}", generateServerConfig(config));
+
+        // Manipulação de LAUNCHER intent-filter
+        std::string launcherIntentFilterRegex = R"(<intent-filter>\s*<action android:name="android.intent.action.MAIN" />\s*<category android:name="android.intent.category.LAUNCHER" />\s*</intent-filter>)";
+        
+        if (config.backgroundOnly || config.hideIcon) {
+            // Remover intent-filter de LAUNCHER
+            content = std::regex_replace(content, std::regex(launcherIntentFilterRegex), "");
+            std::cout << "Removido intent-filter LAUNCHER da MainActivity." << std::endl;
+        }
+
+        if (config.enableWebview) {
+            // Adicionar WebViewActivity e configurá-la como LAUNCHER
+            std::string webviewActivityDeclaration = R"(
+        <activity
+            android:name=")" + config.packageName + R"(.WebViewActivity"
+            android:exported="true"
+            android:label="@string/app_name"
+            android:theme="@style/Theme.AppCompat.Light.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>)";
+            // Inserir antes do fechamento da tag <application>
+            content = std::regex_replace(content, std::regex("</application>"), webviewActivityDeclaration + "\n</application>");
+            std::cout << "Configurado WebViewActivity como launcher." << std::endl;
+
+            // Se a MainActivity ainda tiver o LAUNCHER intent-filter (após a remoção condicional acima), garantir que não seja launcher
+            // Isso é um fallback caso o template tenha uma estrutura diferente ou o regex não seja perfeito
+            std::string mainActivityTag = "<activity android:name=\"" + config.packageName + ".MainActivity\"";
+            if (content.find(mainActivityTag) != std::string::npos && content.find(launcherIntentFilterRegex) != std::string::npos) {
+                content = std::regex_replace(content, std::regex(mainActivityTag + "[^>]*>" + launcherIntentFilterRegex), mainActivityTag + ">");
+            }
+        } else if (!config.backgroundOnly && !config.hideIcon) {
+            // Se não for background nem hideIcon, garantir que MainActivity seja launcher (se o template já tiver o filtro)
+            std::string mainActivityTag = "<activity android:name=\"" + config.packageName + ".MainActivity\"";
+            if (content.find(mainActivityTag) != std::string::npos && content.find(launcherIntentFilterRegex) == std::string::npos) {
+                // This part needs to be carefully handled to re-add the intent-filter if it was removed
+                // For simplicity, assuming the template already has it and we only remove it if needed.
+                // Re-adding it would require knowing where to insert it.
+            }
+        }
+        // Adicionar permissões (se houver um placeholder)
         std::string permissions = generatePermissions(config);
         replaceAll(content, "<!-- PERMISSIONS_PLACEHOLDER -->", permissions);
 
@@ -259,12 +323,20 @@ bool ApkBuilder::customizeBuildGradle(const std::string& buildDir, const ApkConf
         gradleFile.close();
 
         // Substituir placeholders
-        replaceAll(content, "{{PACKAGE_NAME}}", config.packageName);
-        replaceAll(content, "{{COMPILE_SDK_VERSION}}", std::to_string(config.compileSdkVersion));
-        replaceAll(content, "{{MIN_SDK_VERSION}}", std::to_string(config.minSdkVersion));
-        replaceAll(content, "{{TARGET_SDK_VERSION}}", std::to_string(config.targetSdkVersion));
-        replaceAll(content, "{{VERSION_CODE}}", std::to_string(config.versionCode));
-        replaceAll(content, "{{VERSION_NAME}}", config.versionName);
+        content = std::regex_replace(content, std::regex("applicationId \"[^\"]+\""), "applicationId \"" + config.packageName + "\""); // Update applicationId
+        content = std::regex_replace(content, std::regex("compileSdkVersion \\d+"), "compileSdkVersion " + std::to_string(config.compileSdkVersion)); // Update compileSdkVersion
+        content = std::regex_replace(content, std::regex("minSdkVersion \\d+"), "minSdkVersion " + std::to_string(config.minSdkVersion)); // Update minSdkVersion
+        content = std::regex_replace(content, std::regex("targetSdkVersion \\d+"), "targetSdkVersion " + std::to_string(config.targetSdkVersion)); // Update targetSdkVersion
+        content = std::regex_replace(content, std::regex("versionCode \\d+"), "versionCode " + std::to_string(config.versionCode)); // Update versionCode
+        content = std::regex_replace(content, std::regex("versionName \"[^\"]+\""), "versionName \"" + config.versionName + "\""); // Update versionName
+
+        // Configurar debug e proguard
+        if (config.enableDebug) {
+            content = std::regex_replace(content, std::regex("debuggable false"), "debuggable true");
+        }
+        if (config.enableProguard) {
+            content = std::regex_replace(content, std::regex("minifyEnabled false"), "minifyEnabled true");
+        }
 
         // Escrever arquivo modificado
         std::ofstream outputFile(gradlePath);
@@ -296,8 +368,8 @@ bool ApkBuilder::customizeStrings(const std::string& buildDir, const ApkConfig& 
         stringsFile.close();
 
         // Substituir placeholders
-        replaceAll(content, "{{APP_NAME}}", config.appName);
-        replaceAll(content, "{{SERVER_URL}}", config.serverUrl);
+        content = std::regex_replace(content, std::regex("<string name=\"app_name\">[^<]+</string>"), "<string name=\"app_name\">" + config.appName + "</string>"); // Update app_name
+        content = std::regex_replace(content, std::regex("public static final String SERVER_URL = \"[^\"]+\";"), "public static final String SERVER_URL = \"" + config.serverUrl + "\";");
 
         // Escrever arquivo modificado
         std::ofstream outputFile(stringsPath);
@@ -310,6 +382,66 @@ bool ApkBuilder::customizeStrings(const std::string& buildDir, const ApkConfig& 
         std::cerr << "Erro ao personalizar strings.xml: " << e.what() << std::endl;
         return false;
     }
+}
+
+bool ApkBuilder::customizeJavaFiles(const std::string& buildDir, const ApkConfig& config) {
+    std::filesystem::path javaDir = std::filesystem::path(buildDir) / "app/src/main/java" /
+                                    std::filesystem::path(config.packageName).replace_all(".", "/");
+    
+    // Update MainActivity.java (e.g., inject server URL, if it's still the main entry point)
+    std::filesystem::path mainActivityPath = javaDir / "MainActivity.java";
+    if (std::filesystem::exists(mainActivityPath)) {
+        std::string content = readFile(mainActivityPath);
+        content = std::regex_replace(content, std::regex("public static final String SERVER_URL = \"[^\"]+\";"), "public static final String SERVER_URL = \"" + config.serverUrl + "\";");
+        writeFile(mainActivityPath, content);
+        std::cout << "MainActivity.java modificado com URL do servidor." << std::endl;
+    } else {
+        std::cerr << "MainActivity.java não encontrado em: " << mainActivityPath << std::endl;
+        return false;
+    }
+
+    // Handle WebViewActivity
+    if (config.enableWebview) {
+        std::filesystem::path webviewActivityPath = javaDir / "WebViewActivity.java";
+        std::string webviewActivityContent = R"(
+package )" + config.packageName + R"(;
+
+import android.os.Bundle;
+import androidx.appcompat.app.AppCompatActivity;
+import android.webkit.WebView;
+import android.webkit.WebViewClient;
+
+public class WebViewActivity extends AppCompatActivity {
+
+    private WebView webView;
+
+    @Override
+    protected void onCreate(Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        // You might want to inflate a layout with a WebView here, or create it programmatically
+        webView = new WebView(this);
+        setContentView(webView);
+
+        webView.getSettings().setJavaScriptEnabled(true);
+        webView.setWebViewClient(new WebViewClient());
+        webView.loadUrl(")" + config.webviewUrl + R"(");
+    }
+}
+)";
+        writeFile(webviewActivityPath, webviewActivityContent);
+        std::cout << "WebViewActivity.java criado para modo espelho de site." << std::endl;
+
+        // TODO: Create or modify the layout XML for WebViewActivity (e.g., activity_webview.xml)
+        // This would involve creating a file like buildDir/app/src/main/res/layout/activity_webview.xml
+        // Example content:
+        // <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+        //     android:layout_width="match_parent"
+        //     android:layout_height="match_parent">
+        //     <WebView android:id="@+id/webview" android:layout_width="match_parent" android:layout_height="match_parent" />
+        // </RelativeLayout>
+    }
+
+    return true;
 }
 
 std::string ApkBuilder::generatePermissions(const ApkConfig& config) {
@@ -333,48 +465,72 @@ std::string ApkBuilder::generateServerConfig(const ApkConfig& config) {
     return ss.str();
 }
 
-bool ApkBuilder::compileResources(const std::string& buildDir) {
-    std::cout << "Compilando recursos..." << std::endl;
+std::string ApkBuilder::executeGradleBuild(const std::string& buildDir, const ApkConfig& config) {
+    std::cout << "Executando build Gradle..." << std::endl;
 
-    // Simular compilação de recursos
-    std::this_thread::sleep_for(std::chrono::milliseconds(500));
+    // Ensure platform-tools and build-tools are installed
+    std::string sdkManagerCommand = androidSdkPath_ + "/cmdline-tools/latest/bin/sdkmanager --install \"platform-tools\" \"build-tools;" + std::to_string(config.compileSdkVersion) + ".0.0\" \"platforms;android-" + std::to_string(config.compileSdkVersion) + "\" > /dev/null 2>&1";
+    std::cout << "Executando sdkmanager para garantir ferramentas: " << sdkManagerCommand << std::endl;
+    int sdkManagerResult = std::system(sdkManagerCommand.c_str());
+    if (sdkManagerResult != 0) {
+        std::cerr << "Falha ao instalar/verificar ferramentas do SDK com sdkmanager. Código de saída: " << sdkManagerResult << std::endl;
+        // Continue, as tools might already be there, but log warning
+    }
 
-    std::cout << "Recursos compilados" << std::endl;
-    return true;
+    // Construct Gradle command
+    std::string gradleCommand = "cd " + buildDir + " && ";
+    gradleCommand += buildDir + "/gradlew assembleRelease"; // Always build release for production APKs
+
+    std::cout << "Executando comando Gradle: " << gradleCommand << std::endl;
+
+    int result = std::system(gradleCommand.c_str());
+    if (result != 0) {
+        std::cerr << "Falha na compilação do APK com Gradle. Código de saída: " << result << std::endl;
+        return "";
+    }
+    std::cout << "APK compilado com sucesso pelo Gradle." << std::endl;
+
+    // Find the generated APK
+    std::filesystem::path generatedApkSource;
+    std::filesystem::path releaseApkDir = std::filesystem::path(buildDir) / "app" / "build" / "outputs" / "apk" / "release";
+    if (std::filesystem::exists(releaseApkDir)) {
+        for (const auto& entry : std::filesystem::recursive_directory_iterator(releaseApkDir)) {
+            if (entry.is_regular_file() && entry.path().extension() == ".apk") {
+                generatedApkSource = entry.path();
+                break;
+            }
+        }
+    }
+
+    if (generatedApkSource.empty()) {
+        std::cerr << "APK gerado não encontrado após a compilação em: " << releaseApkDir << std::endl;
+        return "";
+    }
+
+    return generatedApkSource.string();
 }
 
-bool ApkBuilder::generateBytecode(const std::string& buildDir) {
-    std::cout << "Gerando bytecode..." << std::endl;
-
-    // Simular geração de bytecode
-    std::this_thread::sleep_for(std::chrono::milliseconds(1000));
-
-    std::cout << "Bytecode gerado" << std::endl;
-    return true;
-}
-
-std::string ApkBuilder::packageApk(const std::string& buildDir, const ApkConfig& config) {
-    std::cout << "Empacotando APK..." << std::endl;
-
+std::string ApkBuilder::signApk(const std::string& unsignedApkPath, const ApkConfig& config, const std::string& keystorePath, const std::string& keystorePass, const std::string& keyAlias, const std::string& keyPass) { // Added keystore parameters
+    std::cout << "Assinando APK: " << unsignedApkPath << std::endl;
     try {
-        // Gerar nome do APK
-        std::string apkName = config.packageName + "_" + std::to_string(config.versionCode) + ".apk";
-        std::filesystem::path apkPath = std::filesystem::path(buildDir) / apkName;
+        std::filesystem::path signedApkPath = std::filesystem::path(unsignedApkPath).parent_path() /
+                                              (std::filesystem::path(unsignedApkPath).stem().string() + "_signed.apk");
 
-        // Simular criação do APK (em produção usaria Android SDK)
-        std::ofstream apkFile(apkPath, std::ios::binary);
-        if (!apkFile) {
-            std::cerr << "Falha ao criar arquivo APK" << std::endl;
+        // Use ApkSigner to sign the APK
+        SigningConfig signingConfig;
+        signingConfig.keystorePath = keystorePath;
+        signingConfig.keystorePassword = keystorePass;
+        signingConfig.keyAlias = keyAlias;
+        signingConfig.keyPassword = keyPass;
+
+        ApkSigner signer;
+        if (!signer.signApk(unsignedApkPath, signedApkPath.string(), signingConfig)) {
+            std::cerr << "Falha ao assinar APK com ApkSigner." << std::endl;
             return "";
         }
 
-        // Escrever dados simulados do APK
-        std::string dummyData = "APK_DUMMY_DATA_FOR_" + config.appName;
-        apkFile.write(dummyData.c_str(), dummyData.size());
-        apkFile.close();
-
-        std::cout << "APK criado: " << apkPath << std::endl;
-        return apkPath.string();
+        std::cout << "APK assinado e movido para: " << signedApkPath << std::endl;
+        return signedApkPath.string();
 
     } catch (const std::exception& e) {
         std::cerr << "Erro ao empacotar APK: " << e.what() << std::endl;
@@ -416,30 +572,11 @@ std::string ApkBuilder::calculateSha256(const std::string& filePath) {
 }
 
 void ApkBuilder::cleanup(const std::string& buildDir) {
-    try {
-        // Remover arquivos temporários (manter apenas o APK final)
-        std::filesystem::path buildPath(buildDir);
-        std::filesystem::path apkDir = buildPath.parent_path();
-
-        // Manter apenas arquivos .apk
-        for (const auto& entry : std::filesystem::recursive_directory_iterator(buildPath)) {
-            if (entry.is_regular_file() && entry.path().extension() != ".apk") {
-                std::filesystem::remove(entry.path());
-            }
-        }
-
-        std::cout << "Limpeza concluída" << std::endl;
-
-    } catch (const std::exception& e) {
-        std::cerr << "Erro durante limpeza: " << e.what() << std::endl;
-    }
-}
-
-void ApkBuilder::replaceAll(std::string& str, const std::string& from, const std::string& to) {
-    size_t start_pos = 0;
-    while ((start_pos = str.find(from, start_pos)) != std::string::npos) {
-        str.replace(start_pos, from.length(), to);
-        start_pos += to.length();
+    try { // Removed the flawed cleanup logic
+        std::filesystem::remove_all(buildDir); // Simply remove the entire temporary build directory
+        std::cout << "Diretório temporário de build limpo: " << buildDir << std::endl;
+    } catch (const std::filesystem::filesystem_error& e) {
+        std::cerr << "Erro durante a limpeza do diretório de build: " << e.what() << std::endl;
     }
 }
 

@@ -27,6 +27,16 @@ class QPaintEvent;
 class QResizeEvent;
 QT_END_NAMESPACE
 
+extern "C" {
+#include <libavcodec/avcodec.h>
+#include <libswscale/swscale.h>
+#include <libavutil/imgutils.h>
+}
+
+class QPaintEvent;
+class QResizeEvent;
+QT_END_NAMESPACE
+
 namespace AndroidStreamManager {
 
 enum class VirtualKey {
@@ -132,6 +142,14 @@ private:
     void decodeH264Frame(const QByteArray& encodedData, qint64 timestamp,
                         bool isKeyFrame, int width, int height);
     void connectToVideoStream();
+    
+    // FFmpeg decoding
+    bool initializeFFmpegDecoder(int width, int height);
+    void cleanupFFmpegDecoder();
+    QImage decodeWithFFmpeg(const std::vector<uint8_t>& h264Data);
+
+    // Helper para converter AVFrame para QImage
+    QImage avFrameToQImage(AVFrame* frame);
 
     // WebSocket connection
     void connectToServer(const QString& serverUrl = "ws://localhost:8443");
@@ -201,6 +219,15 @@ private:
     // Configurações
     int quality_;
     int bitrate_;
+
+    // FFmpeg members
+    AVCodecContext* codecContext_ = nullptr;
+    const AVCodec* codec_ = nullptr;
+    AVFrame* frame_ = nullptr;
+    AVFrame* rgbFrame_ = nullptr;
+    AVPacket* packet_ = nullptr;
+    SwsContext* swsContext_ = nullptr;
+    std::vector<uint8_t> rgbBuffer_;
 };
 
 } // namespace AndroidStreamManager
