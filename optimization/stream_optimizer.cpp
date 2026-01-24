@@ -2,13 +2,12 @@
 #include <iostream>
 #include <algorithm>
 #include <cmath>
-#include <lz4.h>
+#include <cstring>
 
 namespace AndroidStreamManager {
 
-StreamOptimizer::StreamOptimizer() 
-    : compressionLevel_(LZ4_COMPRESSION_LEVEL_DEFAULT)
-    , adaptiveEnabled_(true) {
+StreamOptimizer::StreamOptimizer()
+    : adaptiveEnabled_(true) {
     std::cout << "StreamOptimizer inicializado" << std::endl;
 }
 
@@ -152,13 +151,27 @@ void StreamOptimizer::compressData(StreamData& data, StreamMetrics& metrics) {
 }
 
 void StreamOptimizer::compressWithHigherRatio(StreamData& data, StreamMetrics& metrics) {
-    // Usar nível de compressão mais alto para dados que se beneficiam
-    compressionLevel_ = LZ4_COMPRESSION_LEVEL_MAX;
+    if (data.data.empty()) {
+        return;
+    }
 
-    compressData(data, metrics);
+    const size_t maxCompressedSize = LZ4_compressBound(data.data.size());
+    std::vector<uint8_t> compressedData(maxCompressedSize);
 
-    // Restaurar nível padrão
-    compressionLevel_ = LZ4_COMPRESSION_LEVEL_DEFAULT;
+    const int compressedSize = LZ4_compress_HC(
+        reinterpret_cast<const char*>(data.data.data()),
+        reinterpret_cast<char*>(compressedData.data()),
+        static_cast<int>(data.data.size()),
+        static_cast<int>(maxCompressedSize),
+        LZ4HC_CLEVEL_MAX
+    );
+
+    if (compressedSize > 0) {
+        compressedData.resize(compressedSize);
+        data.data = std::move(compressedData);
+        metrics.compressionUsed = true;
+        metrics.compressionAlgorithm = "LZ4_HC";
+    }
 }
 
 bool StreamOptimizer::isVideoKeyframe(const StreamData& data) {
@@ -280,7 +293,7 @@ void StreamOptimizer::applyDeltaEncoding(StreamData& data, StreamMetrics& metric
 
     // Codificar deltas (simplificado)
     data.data.resize(deltas.size() * sizeof(float));
-    memcpy(data.data.data(), deltas.data(), data.data.size());
+    std::memcpy(data.data.data(), deltas.data(), data.data.size());
 
     metrics.deltaEncodingUsed = true;
 }
@@ -288,10 +301,7 @@ void StreamOptimizer::applyDeltaEncoding(StreamData& data, StreamMetrics& metric
 void StreamOptimizer::compressSensorData(StreamData& data, StreamMetrics& metrics) {
     // Compressão específica para dados de sensores
     // Usar compressão mais agressiva pois sensores geram muitos dados
-
-    compressionLevel_ = LZ4_COMPRESSION_LEVEL_MAX;
-    compressData(data, metrics);
-    compressionLevel_ = LZ4_COMPRESSION_LEVEL_DEFAULT;
+    compressWithHigherRatio(data, metrics);
 }
 
 bool StreamOptimizer::isJSONData(const StreamData& data) {

@@ -4,9 +4,11 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <map>
 #include <chrono>
+#include "shared/apk_config.h"
 
-namespace Compliance {
+namespace AndroidStreamManager {
 
 struct AuditLogEntry {
     std::string timestamp;
@@ -17,13 +19,16 @@ struct AuditLogEntry {
 
 class ComplianceManager {
 public:
-    ComplianceManager();
+    static ComplianceManager& getInstance();
+
+    bool initialize(const std::string& configPath);
 
     // Audit methods
+    void logActivity(const std::string& operatorId, const std::string& activity, const std::string& details);
     void logAction(const std::string& userId, const std::string& action, const std::string& details);
     std::vector<AuditLogEntry> getAuditLogs(const std::string& userId = "", int limit = 100);
 
-    // Consent management (simplified)
+    // Consent management
     bool getUserConsent(const std::string& userId) const;
     void setUserConsent(const std::string& userId, bool consent);
 
@@ -32,20 +37,25 @@ public:
     void recordSessionEnd(const std::string& userId, const std::string& deviceId);
     bool isSessionActive(const std::string& userId, const std::string& deviceId) const;
 
-private:
-    std::vector<AuditLogEntry> auditLogs;
-    std::mutex auditMutex;
+    bool checkCompliance(const ApkConfig& config);
 
-    // Placeholder for consent and session data (in a real system, this would be persisted)
-    // For simplicity, using in-memory maps
+private:
+    ComplianceManager();
+    ~ComplianceManager() = default;
+    ComplianceManager(const ComplianceManager&) = delete;
+    ComplianceManager& operator=(const ComplianceManager&) = delete;
+
+    std::vector<AuditLogEntry> auditLogs;
+    mutable std::mutex auditMutex;
+
     std::map<std::string, bool> userConsents;
     std::map<std::string, std::map<std::string, std::chrono::time_point<std::chrono::system_clock>>> activeSessions;
-    std::mutex consentMutex;
-    std::mutex sessionMutex;
+    mutable std::mutex consentMutex;
+    mutable std::mutex sessionMutex;
 
     std::string getCurrentTimestamp();
 };
-
-} // namespace Compliance
+ 
+} // namespace AndroidStreamManager
 
 #endif // COMPLIANCE_MANAGER_H

@@ -125,6 +125,8 @@ private:
     uint64_t totalCompressedBytes_;
     uint64_t compressedStreams_;
     std::chrono::microseconds totalProcessingTime_;
+    // Utilitários de estatísticas
+    void updateStatistics(const StreamMetrics& metrics);
 };
 
 } // namespace AndroidStreamManager

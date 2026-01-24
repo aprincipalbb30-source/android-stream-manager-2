@@ -544,33 +544,6 @@ std::vector<std::unordered_map<std::string, std::string>> DatabaseManager::execu
     return results;
 }
 
-std::vector<std::unordered_map<std::string, std::string>> DatabaseManager::executeSelect(const std::string& query, const std::vector<std::string>& params) {
-    std::vector<std::unordered_map<std::string, std::string>> results;
-
-    sqlite3_stmt* stmt;
-    if (sqlite3_prepare_v2(db_, query.c_str(), -1, &stmt, nullptr) != SQLITE_OK) {
-        logError("executeSelect prepare (with params)", sqlite3_errmsg(db_));
-        return results;
-    }
-
-    for (size_t i = 0; i < params.size(); ++i) {
-        sqlite3_bind_text(stmt, i + 1, params[i].c_str(), -1, SQLITE_TRANSIENT);
-    }
-
-    while (sqlite3_step(stmt) == SQLITE_ROW) {
-        std::unordered_map<std::string, std::string> row;
-        int columnCount = sqlite3_column_count(stmt);
-        for (int i = 0; i < columnCount; ++i) {
-            const char* columnName = sqlite3_column_name(stmt, i);
-            const char* columnValue = reinterpret_cast<const char*>(sqlite3_column_text(stmt, i));
-            if (columnName && columnValue) row[columnName] = columnValue;
-        }
-        results.push_back(row);
-    }
-    sqlite3_finalize(stmt);
-    return results;
-}
-
 // ========== CONVERSION HELPERS ==========
 
 RegisteredDevice DatabaseManager::rowToDevice(const std::unordered_map<std::string, std::string>& row) {

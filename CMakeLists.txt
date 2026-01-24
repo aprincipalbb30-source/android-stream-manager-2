@@ -17,12 +17,7 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 # Incluir diretórios
-include_directories(${CMAKE_SOURCE_DIR}/src)
-include_directories(${CMAKE_SOURCE_DIR}/shared)
-include_directories(${CMAKE_SOURCE_DIR}/core)
-include_directories(${CMAKE_SOURCE_DIR}/security)
-include_directories(${CMAKE_SOURCE_DIR}/optimization)
-include_directories(${CMAKE_SOURCE_DIR}/compliance)
+# REMOVIDO: include_directories globais. Usaremos target_include_directories por alvo.
 
 # Encontrar dependências
 find_package(OpenSSL REQUIRED)
@@ -45,6 +40,7 @@ FetchContent_MakeAvailable(nlohmann_json)
 
 # LZ4 (tentar encontrar)
 find_library(LZ4_LIBRARY NAMES lz4 liblz4)
+find_path(LZ4_INCLUDE_DIR NAMES lz4.h)
 if(NOT LZ4_LIBRARY)
     message(WARNING "LZ4 library not found - compression features will be limited")
 endif()
@@ -58,10 +54,16 @@ endif()
 # JWT (tentar encontrar)
 FetchContent_Declare(
     jwt_cpp
-    GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
+    GIT_REPOSITORY git@github.com:Thalhammer/jwt-cpp.git
     GIT_TAG        v0.4.0 # Ou a versão mais recente/estável
 )
 FetchContent_MakeAvailable(jwt_cpp)
+
+# Biblioteca Base64 (vendida localmente)
+add_library(base64 STATIC
+    base64.cpp
+)
+target_include_directories(base64 PUBLIC ${CMAKE_SOURCE_DIR})
 
 # Configurações específicas da plataforma
 if(WIN32)
@@ -78,12 +80,19 @@ add_library(optimization_lib STATIC
     optimization/build_cache.cpp
     optimization/thread_pool.cpp
 )
+target_include_directories(optimization_lib
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+        $<INSTALL_INTERFACE:include>
+)
 
-target_link_libraries(optimization_lib
+target_link_libraries(optimization_lib PRIVATE
     ${LZ4_LIBRARY}
     OpenSSL::Crypto
     ${PLATFORM_LIBS}
 )
+# Add include directories for dependencies
+target_include_directories(optimization_lib PRIVATE ${OpenSSL_INCLUDE_DIR} ${LZ4_INCLUDE_DIR})
 
 # Biblioteca de Segurança
 add_library(security_lib STATIC
@@ -91,20 +100,31 @@ add_library(security_lib STATIC
     security/jwt_manager.cpp
     security/apk_signer.cpp
 )
+target_include_directories(security_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
-target_link_libraries(security_lib
+target_link_libraries(security_lib PUBLIC
     OpenSSL::SSL
     OpenSSL::Crypto
-    jwt-cpp::jwt
+    jwt-cpp
     ${PLATFORM_LIBS}
 )
+target_link_libraries(security_lib PRIVATE base64)
 
 # Biblioteca de Compliance
 add_library(compliance_lib STATIC
     compliance/compliance_manager.cpp
 )
+target_include_directories(compliance_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
 target_link_libraries(compliance_lib
+    PRIVATE
+    optimization_lib
     ${PLATFORM_LIBS}
 )
 
@@ -115,10 +135,18 @@ add_library(core_lib STATIC
     core/device_manager.cpp
     shared/protocol.cpp
 )
+target_include_directories(core_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
 # Biblioteca Database
 add_library(database_lib STATIC
     database/database_manager.cpp
+)
+target_include_directories(database_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
 )
 
 target_link_libraries(database_lib
@@ -132,14 +160,30 @@ add_library(server_lib STATIC
     server/websocket_session.cpp
     server/http_server.cpp
 )
+target_include_directories(server_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
 
-# Biblioteca Monitoring
+# Encontrar libprocps para monitoramento
+find_library(LIBPROCPS_LIBRARY NAMES procps)
+find_path(LIBPROCPS_INCLUDE_DIR NAMES proc/readproc.h)
 add_library(monitoring_lib STATIC
     monitoring/metrics_collector.cpp
     monitoring/alerts_manager.cpp
     monitoring/health_checker.cpp
     monitoring/prometheus_exporter.cpp
 )
+target_include_directories(monitoring_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+    $<INSTALL_INTERFACE:include>
+)
+if(LIBPROCPS_LIBRARY)
+    target_link_libraries(monitoring_lib PRIVATE ${LIBPROCPS_LIBRARY})
+    if(LIBPROCPS_INCLUDE_DIR)
+        target_include_directories(monitoring_lib PRIVATE ${LIBPROCPS_INCLUDE_DIR})
+    endif()
+endif()
 
 target_link_libraries(core_lib
     database_lib
@@ -217,13 +261,13 @@ endif()
 if(BUILD_APK_BUILDER)
     add_executable(apk_builder
         builder/main.cpp
-        builder/apk_generator.cpp
     )
 
     target_link_libraries(apk_builder
         core_lib
         ${LIBZIP_LIBRARY}
         ${ZLIB_LIBRARIES}
+        ${PLATFORM_LIBS}
     )
 endif()
 
