@@ -1,11 +1,11 @@
 #!/bin/bash
 #
-# install.sh - Script de Instalação Completa para o Android Stream Manager
+# install.sh - Script de Instalação de Produção para o Android Stream Manager
 #
 # Este script automatiza a instalação de dependências, compilação do projeto
 # e configuração do sistema como um serviço em distribuições baseadas em Debian/Ubuntu.
+# Ele é projetado para ser executado em um servidor de produção.
 #
-
 set -e
 
 # --- Cores para o output ---
@@ -16,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}===================================================${NC}"
-echo -e "${BLUE}🚀 Instalador do Android Stream Manager 🚀${NC}"
+echo -e "${BLUE}🚀 Instalador de Produção do Android Stream Manager 🚀${NC}"
 echo -e "${BLUE}===================================================${NC}"
 
 # --- 1. Verificação de Root ---
@@ -26,16 +26,27 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# --- 2. Verificação do Diretório ---
-if [ ! -f "CMakeLists.txt" ] || [ ! -d "core" ]; then
+# --- 2. Verificações Iniciais ---
+if [ ! -f "CMakeLists.txt" ] || [ ! -d "server" ] || [ ! -d "core" ]; then
     echo -e "${RED}ERRO: O script deve ser executado a partir do diretório raiz do projeto.${NC}"
     exit 1
 fi
 
 echo -e "\n${GREEN}✅ Verificações iniciais concluídas.${NC}"
 
+# --- 3. Coleta de Informações para Produção ---
+echo -e "\n${YELLOW}📝 Etapa 1/5: Configuração do ambiente de produção...${NC}"
+
+read -p "Por favor, insira o nome de domínio (hostname) para este servidor (ex: stream.suaempresa.com): " SERVER_HOSTNAME
+if [ -z "$SERVER_HOSTNAME" ]; then
+    echo -e "${RED}ERRO: O nome de domínio é obrigatório para a configuração de produção.${NC}"
+    exit 1
+fi
+
+echo -e "${GREEN}Hostname configurado para: $SERVER_HOSTNAME${NC}"
+
 # --- 3. Instalação de Dependências (Debian/Ubuntu) ---
-echo -e "\n${YELLOW}🔧 Etapa 1/4: Instalando dependências do sistema...${NC}"
+echo -e "\n${YELLOW}🔧 Etapa 2/5: Instalando dependências do sistema...${NC}"
 
 DEPS=(
     build-essential
@@ -58,7 +69,7 @@ apt-get install -y "${DEPS[@]}"
 echo -e "\n${GREEN}✅ Dependências instaladas com sucesso.${NC}"
 
 # --- 4. Compilação do Projeto ---
-echo -e "\n${YELLOW}🏗️ Etapa 2/4: Compilando o projeto...${NC}"
+echo -e "\n${YELLOW}🏗️ Etapa 3/5: Compilando o projeto para produção...${NC}"
 
 if [ -d "build" ]; then
     echo "Diretório 'build' existente. Removendo para uma compilação limpa..."
@@ -72,24 +83,29 @@ echo "Configurando com CMake..."
 cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
 
 echo "Compilando com make (utilizando todos os cores disponíveis)..."
-make -j$(nproc)
+if ! make -j$(nproc); then
+    echo -e "${RED}ERRO: A compilação falhou. Verifique os erros acima.${NC}"
+    exit 1
+fi
 
 cd ..
 echo -e "\n${GREEN}✅ Projeto compilado com sucesso! Binários estão em 'build/bin'.${NC}"
 
-# --- 5. Geração de Certificados SSL (Self-signed) ---
-echo -e "\n${YELLOW}🔐 Etapa 3/4: Gerando certificados SSL autoassinados...${NC}"
+# --- 5. Verificação de Certificados SSL ---
+echo -e "\n${YELLOW}🔐 Etapa 4/5: Verificando certificados SSL...${NC}"
+CERT_DIR="/etc/android-stream-manager/certs"
+mkdir -p "$CERT_DIR" # Garante que o diretório exista
 
-if [ -f "server.key" ] && [ -f "server.crt" ]; then
-    echo "Certificados SSL já existem. Pulando esta etapa."
+if [ -f "${CERT_DIR}/server.crt" ] && [ -f "${CERT_DIR}/server.key" ]; then
+    echo -e "${GREEN}✅ Certificados SSL encontrados em ${CERT_DIR}.${NC}"
 else
-    openssl req -x509 -newkey rsa:4096 -keyout server.key -out server.crt -days 365 -nodes \
-    -subj "/C=BR/ST=SaoPaulo/L=SaoPaulo/O=AndroidStreamManager/OU=Dev/CN=localhost"
-    echo -e "${GREEN}✅ Certificados 'server.key' e 'server.crt' gerados.${NC}"
+    echo -e "${YELLOW}AVISO: Certificados SSL não encontrados em ${CERT_DIR}.${NC}"
+    echo -e "${YELLOW}Para produção, você DEVE fornecer certificados válidos ('server.crt' e 'server.key').${NC}"
+    echo -e "${YELLOW}Você pode usar Let's Encrypt (certbot) ou outro provedor de sua escolha.${NC}"
 fi
 
 # --- 6. Instalação do Sistema ---
-echo -e "\n${YELLOW}⚙️ Etapa 4/4: Configurando o sistema (usuário, serviço, diretórios...)${NC}"
+echo -e "\n${YELLOW}⚙️ Etapa 5/5: Configurando o sistema (usuário, serviço, diretórios...)${NC}"
 
 if [ ! -f "scripts/init_system.sh" ]; then
     echo -e "${RED}ERRO: O script 'scripts/init_system.sh' não foi encontrado!${NC}"
@@ -97,26 +113,29 @@ if [ ! -f "scripts/init_system.sh" ]; then
 fi
 
 chmod +x scripts/init_system.sh
-scripts/init_system.sh
+# Passa o hostname para o script de inicialização
+scripts/init_system.sh "$SERVER_HOSTNAME"
 
 echo -e "\n${GREEN}✅ Configuração do sistema concluída.${NC}"
 
 # --- Conclusão ---
 echo -e "\n${BLUE}===================================================${NC}"
-echo -e "${GREEN}🎉 Instalação do Android Stream Manager finalizada! 🎉${NC}"
+echo -e "${GREEN}🎉 Instalação de Produção Finalizada! 🎉${NC}"
 echo -e "${BLUE}===================================================${NC}"
 echo -e "\n${YELLOW}⚠️ PRÓXIMOS PASSOS OBRIGATÓRIOS:${NC}"
-echo -e "1. ${YELLOW}Edite o arquivo de configuração de ambiente com suas chaves e senhas:${NC}"
+echo -e "1. ${YELLOW}Configure um registro DNS para o seu hostname '${SERVER_HOSTNAME}' apontando para o IP deste servidor.${NC}"
+echo ""
+echo -e "2. ${YELLOW}Instale certificados SSL válidos em '${CERT_DIR}'.${NC}"
+echo -e "   Exemplo usando Let's Encrypt: sudo certbot certonly --standalone -d ${SERVER_HOSTNAME}"
+echo -e "   Depois, copie os arquivos para o diretório correto."
+echo ""
+echo -e "3. ${YELLOW}Edite o arquivo de ambiente com suas chaves e senhas:${NC}"
 echo -e "   sudo nano /etc/default/android-stream-manager"
+echo -e "   (Especialmente JWT_SECRET, KEYSTORE_PASSWORD, e ANDROID_SDK_ROOT se for construir APKs)"
 echo ""
-echo -e "2. ${YELLOW}Inicie o serviço:${NC}"
+echo -e "4. ${YELLOW}Após configurar tudo, inicie e habilite o serviço:${NC}"
 echo -e "   sudo systemctl start android-stream-manager"
-echo ""
-echo -e "3. ${YELLOW}Verifique o status e os logs do serviço:${NC}"
-echo -e "   sudo systemctl status android-stream-manager"
-echo -e "   sudo journalctl -u android-stream-manager -f"
-echo ""
-echo -e "4. ${YELLOW}Compile e instale o APK no dispositivo Android (veja README_STREAMING.md).${NC}"
+echo -e "   sudo systemctl enable android-stream-manager"
 echo ""
 
 exit 0

@@ -17,6 +17,13 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
+# Obter hostname do argumento
+SERVER_HOSTNAME=$1
+if [ -z "$SERVER_HOSTNAME" ]; then
+    echo -e "${RED}ERRO: O nome do host do servidor não foi fornecido ao script init_system.sh.${NC}"
+    exit 1
+fi
+
 # 2. Criar diretórios necessários
 echo "Criando estrutura de diretórios..."
 mkdir -p /opt/android-stream-manager
@@ -30,7 +37,7 @@ mkdir -p /usr/local/share/android-stream-manager/templates
 echo "Copiando arquivos do sistema..."
 if [ -d "build/bin" ]; then
     cp -r build/bin/* /opt/android-stream-manager/
-else
+else # Esta verificação deve ser feita no install.sh, mas mantemos por segurança
     echo -e "${YELLOW}Aviso: Diretório build/bin não encontrado. Execute 'make build' primeiro.${NC}"
 fi
 
@@ -73,7 +80,7 @@ fi
 # 8. Instalar serviço systemd
 echo "Instalando serviço systemd..."
 cat > /etc/systemd/system/android-stream-manager.service << 'EOF'
-[Unit]
+[Unit] 
 Description=Android Stream Manager Service
 After=network.target
 Requires=network.target
@@ -101,7 +108,7 @@ LimitNPROC=4096
 LimitCORE=0
 
 # Comando de execução
-ExecStart=/opt/android-stream-manager/android_stream_dashboard --config /etc/android-stream-manager/config/system_config.json
+ExecStart=/opt/android-stream-manager/stream_server --port ${SERVER_PORT} --cert ${CERT_PATH} --key ${KEY_PATH}
 
 # Logs
 StandardOutput=journal
@@ -115,12 +122,17 @@ EOF
 # 9. Criar arquivo de ambiente
 echo "Criando arquivo de ambiente..."
 cat > /etc/default/android-stream-manager << 'EOF'
-# Configurações de ambiente do Android Stream Manager
-ANDROID_SDK_ROOT=/path/to/your/android-sdk
+# Configurações de ambiente para o Android Stream Manager
+
+# Configurações de Rede e SSL
+SERVER_HOSTNAME=your-server-hostname.com
+SERVER_PORT=8443
+CERT_PATH=/etc/android-stream-manager/certs/server.crt
+KEY_PATH=/etc/android-stream-manager/certs/server.key
+
+# Configurações de Segurança (ALTERE ESTES VALORES!)
+JWT_SECRET="your-super-secret-jwt-key-that-is-long-and-random"
 ANDROID_HOME=$ANDROID_SDK_ROOT
-JWT_SECRET="your-jwt-secret-here-change-this"
-KEYSTORE_PASSWORD="ChangeThisPassword123!"
-KEY_PASSWORD="ChangeThisPassword123!"
 
 # Logging
 LOG_LEVEL=info
@@ -129,12 +141,14 @@ LOG_DIR=/var/log/android-stream-manager
 # Database
 DB_PATH=/var/lib/android-stream-manager/database.db
 EOF
+# Substituir o hostname no arquivo de ambiente
+sed -i "s/SERVER_HOSTNAME=.*/SERVER_HOSTNAME=${SERVER_HOSTNAME}/" /etc/default/android-stream-manager
 
-echo -e "${YELLOW}Edite /etc/default/android-stream-manager com suas configurações${NC}"
+echo -e "${YELLOW}AVISO: O arquivo /etc/default/android-stream-manager foi criado com valores padrão.${NC}"
+echo -e "${YELLOW}É CRUCIAL que você edite este arquivo e defina um JWT_SECRET seguro!${NC}"
 
 # 10. Recarregar systemd
 systemctl daemon-reload
-systemctl enable android-stream-manager.service
 
 # 11. Criar script de backup
 echo "Criando script de backup..."
@@ -173,10 +187,10 @@ fi
 echo -e "${GREEN}=== Inicialização completa! ===${NC}"
 echo ""
 echo -e "${YELLOW}Próximos passos:${NC}"
-echo "1. Edite /etc/default/android-stream-manager"
-echo "2. Execute: sudo systemctl start android-stream-manager"
-echo "3. Verifique logs: sudo journalctl -u android-stream-manager -f"
-echo "4. Acesse: https://localhost:8443 (ignore o aviso SSL)"
+echo "1. Edite /etc/default/android-stream-manager para definir suas chaves secretas."
+echo "2. Coloque seus certificados SSL em /etc/android-stream-manager/certs/"
+echo "3. Inicie o serviço com: sudo systemctl start android-stream-manager"
+echo "4. Verifique os logs com: sudo journalctl -u android-stream-manager -f"
 echo ""
-echo -e "${GREEN}Para gerar certificados válidos:${NC}"
-echo "Execute: ./scripts/generate_certs.sh"
+echo -e "${GREEN}O serviço foi configurado, mas não iniciado ou habilitado automaticamente.${NC}"
+echo -e "${GREEN}Inicie-o manualmente após concluir a configuração.${NC}"
