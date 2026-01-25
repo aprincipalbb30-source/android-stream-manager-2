@@ -14,8 +14,6 @@ compile_commands.json
 _CPack_Packages/
 
 # Binários e bibliotecas compiladas
-bin/
-lib/
 /bin/
 /lib/
 
@@ -31,7 +29,6 @@ android-client-template/local.properties
 # Arquivos de IDE
 .idea/
 *.suo
-*.user
 *.sln
 *.vcxproj
 *.vs/
