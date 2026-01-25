@@ -668,6 +668,10 @@ std::vector<uint8_t> StreamServer::base64Decode(const std::string& encoded_strin
     int in_ = 0;
     uint8_t char_array_4[4], char_array_3[3];
     std::vector<uint8_t> decoded;
+    decoded.reserve(in_len * 3 / 4);
+
+    // Remover padding se existir
+    if (in_len > 1 && encoded_string[in_len - 1] == '=') in_len--;
 
     while (in_len-- && (encoded_string[in_] != '=') && isBase64(encoded_string[in_])) {
         char_array_4[i++] = encoded_string[in_]; in_++;

@@ -42,11 +42,14 @@ DEPS=(
     cmake
     git
     libssl-dev
+    nlohmann-json3-dev
     zlib1g-dev
     liblz4-dev
     libzip-dev
-    qt6-base-dev
+    qt6-base-dev-tools
     libsqlite3-dev
+    openjdk-17-jdk
+    unzip
 )
 
 apt-get update
@@ -94,7 +97,7 @@ if [ ! -f "scripts/init_system.sh" ]; then
 fi
 
 chmod +x scripts/init_system.sh
-./scripts/init_system.sh
+scripts/init_system.sh
 
 echo -e "\n${GREEN}✅ Configuração do sistema concluída.${NC}"
 

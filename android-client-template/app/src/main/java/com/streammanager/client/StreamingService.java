@@ -569,20 +569,14 @@ public class StreamingService extends Service {
             int inputBufferIndex = videoEncoder.dequeueInputBuffer(10000); // 10ms timeout
             if (inputBufferIndex >= 0) {
                 ByteBuffer inputBuffer = videoEncoder.getInputBuffer(inputBufferIndex);
-
                 if (inputBuffer != null) {
                     inputBuffer.clear();
 
-                    // Criar array de bytes do bitmap (RGBA)
-                    int bitmapSize = bitmap.getByteCount();
-                    byte[] bitmapBytes = new byte[bitmapSize];
-                    ByteBuffer bitmapBuffer = ByteBuffer.allocate(bitmapSize);
+                    // Copiar pixels para o input buffer do encoder
+                    ByteBuffer bitmapBuffer = ByteBuffer.allocate(bitmap.getByteCount());
                     bitmap.copyPixelsToBuffer(bitmapBuffer);
                     bitmapBuffer.rewind();
-                    bitmapBuffer.get(bitmapBytes);
-
-                    // Copiar para input buffer do encoder
-                    inputBuffer.put(bitmapBytes);
+                    inputBuffer.put(bitmapBuffer);
 
                     // Timestamp para sincronização
                     long presentationTimeUs = System.nanoTime() / 1000;
@@ -590,7 +584,7 @@ public class StreamingService extends Service {
                     videoEncoder.queueInputBuffer(
                         inputBufferIndex,
                         0,
-                        bitmapBytes.length,
+                        bitmap.getByteCount(),
                         presentationTimeUs,
                         0
                     );

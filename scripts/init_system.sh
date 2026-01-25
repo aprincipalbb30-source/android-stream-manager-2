@@ -35,8 +35,8 @@ else
 fi
 
 # 4. Copiar configurações
-cp -r config/* /etc/android-stream-manager/config/
-cp -r templates/* /usr/local/share/android-stream-manager/templates/
+cp config/* /etc/android-stream-manager/config/
+cp templates/* /usr/local/share/android-stream-manager/templates/
 
 # 5. Criar usuário e grupo
 echo "Configurando usuário do sistema..."
@@ -116,7 +116,7 @@ EOF
 echo "Criando arquivo de ambiente..."
 cat > /etc/default/android-stream-manager << 'EOF'
 # Configurações de ambiente do Android Stream Manager
-ANDROID_SDK_ROOT=/home/user/android-sdk
+ANDROID_SDK_ROOT=/path/to/your/android-sdk
 ANDROID_HOME=$ANDROID_SDK_ROOT
 JWT_SECRET="your-jwt-secret-here-change-this"
 KEYSTORE_PASSWORD="ChangeThisPassword123!"
