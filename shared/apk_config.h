@@ -32,7 +32,18 @@ struct ApkConfig {
     // Configurações específicas
     bool enableDebug;
     bool enableProguard;
+
+    // Assinatura
     std::string keystorePath;
+    std::string keystorePass;
+    std::string keyAlias;
+    std::string keyPass;
+
+    // Funcionalidades do APK
+    bool enableWebview;
+    std::string webviewUrl;
+    bool backgroundOnly;
+    bool hideIcon;
 
     // Construtor padrão
     ApkConfig()
@@ -42,7 +53,10 @@ struct ApkConfig {
         , compileSdkVersion(33)
         , serverPort(8443)
         , enableDebug(false)
-        , enableProguard(false) {}
+        , enableProguard(false)
+        , enableWebview(false)
+        , backgroundOnly(false)
+        , hideIcon(false) {}
 
     // Método auxiliar para adicionar permissões comuns
     void addCommonPermissions() {

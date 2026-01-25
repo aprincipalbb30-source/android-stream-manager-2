@@ -266,7 +266,7 @@ if(BUILD_TESTS)
     add_test(NAME unit_tests COMMAND unit_tests)
 
     # Teste de streaming
-    add_executable(test_streaming tests/test_streaming.cpp)
+    add_executable(test_streaming tests/test_streaming.cpp) # Corrigido o caminho do arquivo de teste
     target_link_libraries(test_streaming PRIVATE android_stream_lib)
 endif()
 

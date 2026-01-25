@@ -4,7 +4,7 @@
 #include <filesystem>
 #include <sstream>
 #include <iomanip>
-#include <regex> // For string replacement
+#include <regex>
 #include <openssl/sha.h>
 #include <chrono>
 #include <thread>
@@ -86,7 +86,7 @@ BuildResult ApkBuilder::buildApk(const ApkConfig& config) {
         }
 
         // 6. Assinar o APK
-        std::string signedApkPath = signApk(unsignedApkPath, config, config.keystorePath, config.keystorePass, config.keyAlias, config.keyPass);
+        std::string signedApkPath = signApk(unsignedApkPath, config);
         if (signedApkPath.empty()) {
             result.errorMessage = "Falha ao assinar o APK";
             return result;
@@ -139,12 +139,12 @@ bool ApkBuilder::validateConfig(const ApkConfig& config) {
         return false;
     }
     
-    if (config.enableWebview && config.backgroundOnly) { // Assumindo que estes campos existem em ApkConfig
+    if (config.enableWebview && config.backgroundOnly) {
         std::cerr << "Modo WebView e Background Only são mutuamente exclusivos." << std::endl;
         return false;
     }
 
-    if (config.enableWebview) { // Assumindo que estes campos existem em ApkConfig
+    if (config.enableWebview) {
         // Basic URL validation
         if (config.webviewUrl.empty() || !(config.webviewUrl.rfind("http://", 0) == 0 || config.webviewUrl.rfind("https://", 0) == 0)) {
             std::cerr << "URL para WebView inválida. Deve começar com http:// ou https://." << std::endl;
@@ -295,7 +295,7 @@ bool ApkBuilder::customizeManifest(const std::string& buildDir, const ApkConfig&
             if (content.find(mainActivityTag) != std::string::npos && content.find(launcherIntentFilterRegex) != std::string::npos) {
                 content = std::regex_replace(content, std::regex(mainActivityTag + "[^>]*>" + launcherIntentFilterRegex), mainActivityTag + ">");
             }
-        } else if (!config.backgroundOnly && !config.hideIcon) { // Assumindo que estes campos existem
+        } else if (!config.backgroundOnly && !config.hideIcon) {
             // Se não for background nem hideIcon, garantir que MainActivity seja launcher (se o template já tiver o filtro)
             std::string mainActivityTag = "<activity android:name=\"" + config.packageName + ".MainActivity\"";
             if (content.find(mainActivityTag) != std::string::npos && content.find(launcherIntentFilterRegex) == std::string::npos) {
@@ -422,7 +422,7 @@ bool ApkBuilder::customizeJavaFiles(const std::string& buildDir, const ApkConfig
     }
 
     // Handle WebViewActivity
-    if (config.enableWebview) { // Assumindo que este campo existe
+    if (config.enableWebview) {
         std::filesystem::path webviewActivityPath = javaDir / "WebViewActivity.java";
         std::string webviewActivityContent = R"(
 package )" + config.packageName + R"(;
@@ -445,7 +445,7 @@ public class WebViewActivity extends AppCompatActivity {
 
         webView.getSettings().setJavaScriptEnabled(true);
         webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl(")" + config.webviewUrl + R"("); // Assumindo que webviewUrl existe
+        webView.loadUrl(")" + config.webviewUrl + R"(");
     }
 }
 )";
@@ -531,7 +531,7 @@ std::string ApkBuilder::executeGradleBuild(const std::string& buildDir, const Ap
     return generatedApkSource.string();
 }
 
-std::string ApkBuilder::signApk(const std::string& unsignedApkPath, const ApkConfig& config, const std::string& keystorePath, const std::string& keystorePass, const std::string& keyAlias, const std::string& keyPass) {
+std::string ApkBuilder::signApk(const std::string& unsignedApkPath, const ApkConfig& config) {
     std::cout << "Assinando APK: " << unsignedApkPath << std::endl;
     try {
         std::filesystem::path signedApkPath = std::filesystem::path(unsignedApkPath).parent_path() /
@@ -539,10 +539,10 @@ std::string ApkBuilder::signApk(const std::string& unsignedApkPath, const ApkCon
 
         // Use ApkSigner to sign the APK
         SigningConfig signingConfig;
-        signingConfig.keystorePath = keystorePath;
-        signingConfig.keystorePassword = keystorePass;
-        signingConfig.keyAlias = keyAlias;
-        signingConfig.keyPassword = keyPass;
+        signingConfig.keystorePath = config.keystorePath;
+        signingConfig.keystorePassword = config.keystorePass;
+        signingConfig.keyAlias = config.keyAlias;
+        signingConfig.keyPassword = config.keyPass;
 
         ApkSigner signer;
         if (!signer.signApk(unsignedApkPath, signedApkPath.string(), signingConfig)) {
@@ -567,23 +567,28 @@ std::string ApkBuilder::calculateSha256(const std::string& filePath) {
             return "";
         }
 
-        SHA256_CTX sha256;
-        SHA256_Init(&sha256);
+        // Modern OpenSSL 3.0+ approach using EVP API to avoid deprecation warnings
+        EVP_MD_CTX* mdctx = EVP_MD_CTX_new();
+        if (!mdctx) return "";
 
-        char buffer[8192];
-        while (file.read(buffer, sizeof(buffer))) {
-            SHA256_Update(&sha256, buffer, file.gcount());
+        const EVP_MD* md = EVP_sha256();
+        EVP_DigestInit_ex(mdctx, md, nullptr);
+
+        std::vector<char> buffer(8192);
+        while (file.read(buffer.data(), buffer.size())) {
+            EVP_DigestUpdate(mdctx, buffer.data(), file.gcount());
         }
-        SHA256_Update(&sha256, buffer, file.gcount());
+        EVP_DigestUpdate(mdctx, buffer.data(), file.gcount());
 
-        unsigned char hash[SHA256_DIGEST_LENGTH];
-        SHA256_Final(hash, &sha256);
+        unsigned char hash[EVP_MAX_MD_SIZE];
+        unsigned int hash_len;
+        EVP_DigestFinal_ex(mdctx, hash, &hash_len);
+        EVP_MD_CTX_free(mdctx);
 
         std::stringstream ss;
-        for (int i = 0; i < SHA256_DIGEST_LENGTH; i++) {
-            ss << std::hex << std::setw(2) << std::setfill('0') << (int)hash[i];
+        for (unsigned int i = 0; i < hash_len; i++) {
+            ss << std::hex << std::setw(2) << std::setfill('0') << static_cast<int>(hash[i]);
         }
-
         return ss.str();
 
     } catch (const std::exception& e) {
