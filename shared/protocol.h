@@ -4,8 +4,30 @@
 #include <string>
 #include <vector>
 #include <cstdint>
+#include <optional>
+#include <nlohmann/json_fwd.hpp> // Forward declaration para json
 
 namespace AndroidStreamManager {
+
+// Estrutura de mensagem genérica usada pela implementação em protocol.cpp
+struct Message {
+    std::string type;
+    long long timestamp;
+    std::optional<nlohmann::json> payload;
+};
+
+// Classe de protocolo para serialização/desserialização
+class Protocol {
+public:
+    static std::string serialize(const Message& msg);
+    static std::optional<Message> deserialize(const std::string& data);
+    static std::string createHelloMessage(const std::string& deviceId, const std::string& deviceModel);
+    static std::string createFrameMessage(const std::vector<unsigned char>& frameData, int width, int height);
+    static std::string createCommandMessage(const std::string& command, const nlohmann::json& args);
+    static std::string createResponseMessage(int original_cmd_id, bool success, const std::string& details);
+    static std::string createHeartbeatMessage();
+    static std::string createAuthRequestMessage(const std::string& token);
+};
 
 // Protocolo de comunicação entre dashboard e dispositivos
 struct ControlMessage {

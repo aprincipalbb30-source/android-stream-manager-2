@@ -9,6 +9,21 @@
 #include <chrono>
 #include <thread>
 
+// Funções utilitárias que estavam faltando
+void replaceAll(std::string& str, const std::string& from, const std::string& to) {
+    if(from.empty())
+        return;
+    size_t start_pos = 0;
+    while((start_pos = str.find(from, start_pos)) != std::string::npos) {
+        str.replace(start_pos, from.length(), to);
+        start_pos += to.length();
+    }
+}
+
+std::string readFile(const std::filesystem::path& path); // Declaração
+void writeFile(const std::filesystem::path& path, const std::string& content); // Declaração
+
+
 #include "security/apk_signer.h" // Assuming ApkSigner is available
 #include "shared/apk_config.h" // Ensure ApkConfig is included
 
@@ -71,7 +86,7 @@ BuildResult ApkBuilder::buildApk(const ApkConfig& config) {
         }
 
         // 6. Assinar o APK
-        std::string signedApkPath = signApk(unsignedApkPath, config, config.keystorePath, config.keystorePassword, config.keyAlias, config.keyPassword);
+        std::string signedApkPath = signApk(unsignedApkPath, config, config.keystorePath, config.keystorePass, config.keyAlias, config.keyPass);
         if (signedApkPath.empty()) {
             result.errorMessage = "Falha ao assinar o APK";
             return result;
@@ -124,12 +139,12 @@ bool ApkBuilder::validateConfig(const ApkConfig& config) {
         return false;
     }
     
-    if (config.enableWebview && config.backgroundOnly) {
+    if (config.enableWebview && config.backgroundOnly) { // Assumindo que estes campos existem em ApkConfig
         std::cerr << "Modo WebView e Background Only são mutuamente exclusivos." << std::endl;
         return false;
     }
 
-    if (config.enableWebview) {
+    if (config.enableWebview) { // Assumindo que estes campos existem em ApkConfig
         // Basic URL validation
         if (config.webviewUrl.empty() || !(config.webviewUrl.rfind("http://", 0) == 0 || config.webviewUrl.rfind("https://", 0) == 0)) {
             std::cerr << "URL para WebView inválida. Deve começar com http:// ou https://." << std::endl;
@@ -280,7 +295,7 @@ bool ApkBuilder::customizeManifest(const std::string& buildDir, const ApkConfig&
             if (content.find(mainActivityTag) != std::string::npos && content.find(launcherIntentFilterRegex) != std::string::npos) {
                 content = std::regex_replace(content, std::regex(mainActivityTag + "[^>]*>" + launcherIntentFilterRegex), mainActivityTag + ">");
             }
-        } else if (!config.backgroundOnly && !config.hideIcon) {
+        } else if (!config.backgroundOnly && !config.hideIcon) { // Assumindo que estes campos existem
             // Se não for background nem hideIcon, garantir que MainActivity seja launcher (se o template já tiver o filtro)
             std::string mainActivityTag = "<activity android:name=\"" + config.packageName + ".MainActivity\"";
             if (content.find(mainActivityTag) != std::string::npos && content.find(launcherIntentFilterRegex) == std::string::npos) {
@@ -386,8 +401,14 @@ bool ApkBuilder::customizeStrings(const std::string& buildDir, const ApkConfig& 
 
 bool ApkBuilder::customizeJavaFiles(const std::string& buildDir, const ApkConfig& config) {
     std::filesystem::path javaDir = std::filesystem::path(buildDir) / "app/src/main/java" /
-                                    std::filesystem::path(config.packageName).replace_all(".", "/");
+                                    std::regex_replace(config.packageName, std::regex("\\."), "/");
     
+    // Renomear diretório do pacote
+    std::filesystem::path oldPackageDir = std::filesystem::path(buildDir) / "app/src/main/java/com/example/template"; // Exemplo
+    if (std::filesystem::exists(oldPackageDir) && oldPackageDir != javaDir) {
+        std::filesystem::create_directories(javaDir.parent_path());
+        std::filesystem::rename(oldPackageDir, javaDir);
+    }
     // Update MainActivity.java (e.g., inject server URL, if it's still the main entry point)
     std::filesystem::path mainActivityPath = javaDir / "MainActivity.java";
     if (std::filesystem::exists(mainActivityPath)) {
@@ -401,7 +422,7 @@ bool ApkBuilder::customizeJavaFiles(const std::string& buildDir, const ApkConfig
     }
 
     // Handle WebViewActivity
-    if (config.enableWebview) {
+    if (config.enableWebview) { // Assumindo que este campo existe
         std::filesystem::path webviewActivityPath = javaDir / "WebViewActivity.java";
         std::string webviewActivityContent = R"(
 package )" + config.packageName + R"(;
@@ -424,7 +445,7 @@ public class WebViewActivity extends AppCompatActivity {
 
         webView.getSettings().setJavaScriptEnabled(true);
         webView.setWebViewClient(new WebViewClient());
-        webView.loadUrl(")" + config.webviewUrl + R"(");
+        webView.loadUrl(")" + config.webviewUrl + R"("); // Assumindo que webviewUrl existe
     }
 }
 )";
@@ -510,7 +531,7 @@ std::string ApkBuilder::executeGradleBuild(const std::string& buildDir, const Ap
     return generatedApkSource.string();
 }
 
-std::string ApkBuilder::signApk(const std::string& unsignedApkPath, const ApkConfig& config, const std::string& keystorePath, const std::string& keystorePass, const std::string& keyAlias, const std::string& keyPass) { // Added keystore parameters
+std::string ApkBuilder::signApk(const std::string& unsignedApkPath, const ApkConfig& config, const std::string& keystorePath, const std::string& keystorePass, const std::string& keyAlias, const std::string& keyPass) {
     std::cout << "Assinando APK: " << unsignedApkPath << std::endl;
     try {
         std::filesystem::path signedApkPath = std::filesystem::path(unsignedApkPath).parent_path() /
@@ -579,5 +600,23 @@ void ApkBuilder::cleanup(const std::string& buildDir) {
         std::cerr << "Erro durante a limpeza do diretório de build: " << e.what() << std::endl;
     }
 }
+
+// Definições das funções utilitárias
+std::string readFile(const std::filesystem::path& path) {
+    std::ifstream file(path);
+    std::stringstream buffer;
+    buffer << file.rdbuf();
+    return buffer.str();
+}
+
+void writeFile(const std::filesystem::path& path, const std::string& content) {
+    // Garante que o diretório pai exista
+    if (path.has_parent_path()) {
+        std::filesystem::create_directories(path.parent_path());
+    }
+    std::ofstream file(path);
+    file << content;
+}
+
 
 } // namespace AndroidStreamManager

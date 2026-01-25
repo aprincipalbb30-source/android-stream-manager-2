@@ -58,9 +58,16 @@ DEPS=(
     liblz4-dev
     libzip-dev
     qt6-base-dev-tools
+    qt6-websockets-dev
+    qt6-multimedia-dev
     libsqlite3-dev
     openjdk-17-jdk
     unzip
+    libproc2-dev
+    pkg-config
+    libavcodec-dev
+    libavutil-dev
+    libswscale-dev
 )
 
 apt-get update

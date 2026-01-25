@@ -1,8 +1,11 @@
 #ifndef SYSTEM_MANAGER_H
 #define SYSTEM_MANAGER_H
 
-#include "tls_manager.h"
-#include "jwt_manager.h"
+#include <string>
+#include <atomic>
+#include <chrono>
+#include <memory>
+#include <unordered_map>
 #include "apk_signer.h"
 #include "compliance_manager.h"
 #include "thread_pool.h"
@@ -13,6 +16,10 @@
 #include "monitoring/alerts_manager.h"
 #include "monitoring/health_checker.h"
 #include "monitoring/prometheus_exporter.h"
+
+// Forward declarations para evitar includes circulares e desnecessários no header
+class SecureTlsClient;
+struct ApkConfig;
 
 namespace AndroidStreamManager {
 

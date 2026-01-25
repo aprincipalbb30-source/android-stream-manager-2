@@ -5,7 +5,9 @@
 #include <vector>
 #include <memory>
 #include <optional>
-#include <shared/protocol.h>
+#include <chrono>
+#include <unordered_map>
+// #include <shared/protocol.h> // Removido se não for diretamente usado aqui
 #include <sqlite3.h>
 
 namespace AndroidStreamManager {

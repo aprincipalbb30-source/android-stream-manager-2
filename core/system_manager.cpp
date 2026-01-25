@@ -1,4 +1,15 @@
 #include "system_manager.h"
+#include "security/tls_manager.h" // Incluir a implementação aqui
+#include "security/jwt_manager.h"
+#include "compliance/compliance_manager.h"
+#include "security/corporate_signing_manager.h"
+#include "database/database_manager.h"
+#include "monitoring/metrics_collector.h"
+#include "monitoring/alerts_manager.h"
+#include "monitoring/health_checker.h"
+#include "monitoring/prometheus_exporter.h"
+#include "core/apk_builder.h"
+#include <iostream>
 
 namespace AndroidStreamManager {
 

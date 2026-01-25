@@ -1,14 +1,30 @@
 #include "protocol.h"
 #include <nlohmann/json.hpp>
 #include <iostream>
+#include <optional> // Para std::optional
+#include <chrono>   // Para std::chrono
 
 namespace AndroidStreamManager {
 
 using json = nlohmann::json;
 
+// Definições que estavam faltando e causando erros de "não declarado"
+// Elas devem corresponder ao que é usado no resto do código.
+struct Message {
+    std::string type;
+    long long timestamp;
+    std::optional<json> payload;
+};
+
+class Protocol {
+public:
+    static std::string serialize(const Message& msg);
+    static std::optional<Message> deserialize(const std::string& data);
+};
+
 // Helper para obter valor com fallback
 template<typename T>
-T get_optional(const json& j, const std::string& key, const T& default_value) {
+T get_optional(const json& j, const char* key, const T& default_value) {
     return j.contains(key) ? j.at(key).get<T>() : default_value;
 }
 

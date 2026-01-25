@@ -29,8 +29,10 @@ if(NOT SQLite3_FOUND)
     message(FATAL_ERROR "SQLite3 not found - database features are required")
 endif()
 
-# Biblioteca JSON nlohmann (header-only)
+# --- Dependências via FetchContent e find_package ---
 include(FetchContent)
+
+# Biblioteca JSON nlohmann (header-only)
 FetchContent_Declare(
     nlohmann_json
     URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp
@@ -38,34 +40,51 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
-# LZ4 (tentar encontrar)
-find_library(LZ4_LIBRARY NAMES lz4 liblz4)
-find_path(LZ4_INCLUDE_DIR NAMES lz4.h)
-if(NOT LZ4_LIBRARY)
-    message(WARNING "LZ4 library not found - compression features will be limited")
-endif()
-
-# libzip (tentar encontrar)
-find_library(LIBZIP_LIBRARY NAMES zip libzip)
-if(NOT LIBZIP_LIBRARY)
-    message(WARNING "libzip library not found - APK operations may be limited")
-endif()
-
-# JWT (tentar encontrar)
+# JWT (jwt-cpp)
 FetchContent_Declare(
     jwt_cpp
-    GIT_REPOSITORY git@github.com:Thalhammer/jwt-cpp.git
-    GIT_TAG        v0.4.0 # Ou a versão mais recente/estável
+    GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
+    GIT_TAG        v0.7.0
 )
 FetchContent_MakeAvailable(jwt_cpp)
 
-# Biblioteca Base64 (vendida localmente)
-add_library(base64 STATIC
-    base64.cpp
-)
-target_include_directories(base64 PUBLIC ${CMAKE_SOURCE_DIR})
+# LZ4 (tentar encontrar e usar FetchContent como fallback)
+find_package(lz4 QUIET)
+if(NOT lz4_FOUND)
+    message(STATUS "lz4 not found. Fetching from source.")
+    FetchContent_Declare(
+        lz4_fetch
+        GIT_REPOSITORY https://github.com/lz4/lz4.git
+        GIT_TAG        v1.9.4
+    )
+    FetchContent_MakeAvailable(lz4_fetch)
+    # O alvo criado pelo build do lz4 é 'liblz4_static'
+    add_library(lz4::lz4 ALIAS lz4_static) # Correção: removido 'lib' do nome do alvo
+endif()
 
-# Configurações específicas da plataforma
+# libzip (tentar encontrar e usar FetchContent como fallback)
+# A busca por libzip pode falhar em sistemas com pacotes quebrados.
+# A lógica a seguir tenta usar o find_package e, se falhar, recorre ao FetchContent.
+find_package(libzip QUIET) 
+if(NOT libzip_FOUND)
+    message(STATUS "libzip not found or broken. Fetching from source.")
+    # Se não for encontrado (ou se a busca falhou), usamos FetchContent.
+    # Isso também lida com o caso de uma instalação de sistema quebrada.
+    FetchContent_Declare(
+        libzip_fetch
+        URL https://libzip.org/download/libzip-1.10.1.tar.gz # Usando uma versão estável
+        URL_HASH SHA256=343b60d839162479d63c5932f93d3b97de13c24a4f6f05793f126944e21198e3
+    )
+    # Desativamos opções que podem buscar por dependências externas desnecessárias
+    # para garantir que ele use as que já encontramos (OpenSSL, ZLIB).
+    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
+    set(ENABLE_OPENSSL OFF CACHE BOOL "" FORCE) # Já encontramos o OpenSSL fora
+    FetchContent_MakeAvailable(libzip_fetch)
+    add_library(libzip::zip ALIAS zip)
+endif()
+
+# --- Configurações Específicas da Plataforma ---
 if(WIN32)
     add_definitions(-DWINDOWS_BUILD -D_CRT_SECURE_NO_WARNINGS)
     set(PLATFORM_LIBS ws2_32 crypt32)
@@ -74,134 +93,83 @@ elseif(UNIX)
     set(PLATFORM_LIBS pthread dl)
 endif()
 
-# Biblioteca de Otimização
-add_library(optimization_lib STATIC
+# --- Biblioteca Principal Unificada ---
+# Unificamos todas as fontes em uma única biblioteca para simplificar
+# o gerenciamento de dependências e includes, resolvendo os erros de compilação.
+add_library(android_stream_lib STATIC
+    # Base64
+    base64.cpp
+
+    # Optimization
     optimization/stream_optimizer.cpp
     optimization/build_cache.cpp
     optimization/thread_pool.cpp
-)
-target_include_directories(optimization_lib
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-        $<INSTALL_INTERFACE:include>
-)
 
-target_link_libraries(optimization_lib PRIVATE
-    ${LZ4_LIBRARY}
-    OpenSSL::Crypto
-    ${PLATFORM_LIBS}
-)
-# Add include directories for dependencies
-target_include_directories(optimization_lib PRIVATE ${OpenSSL_INCLUDE_DIR} ${LZ4_INCLUDE_DIR})
-
-# Biblioteca de Segurança
-add_library(security_lib STATIC
+    # Security
     security/tls_manager.cpp
     security/jwt_manager.cpp
     security/apk_signer.cpp
-)
-target_include_directories(security_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include>
-)
 
-target_link_libraries(security_lib PUBLIC
-    OpenSSL::SSL
-    OpenSSL::Crypto
-    jwt-cpp
-    ${PLATFORM_LIBS}
-)
-target_link_libraries(security_lib PRIVATE base64)
-
-# Biblioteca de Compliance
-add_library(compliance_lib STATIC
+    # Compliance
     compliance/compliance_manager.cpp
-)
-target_include_directories(compliance_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include>
-)
 
-target_link_libraries(compliance_lib
-    PRIVATE
-    optimization_lib
-    ${PLATFORM_LIBS}
-)
+    # Database
+    database/database_manager.cpp
 
-# Biblioteca Core
-add_library(core_lib STATIC
+    # Server
+    server/stream_server.cpp
+    server/websocket_session.cpp
+    server/http_server.cpp
+
+    # Monitoring
+    monitoring/metrics_collector.cpp
+    monitoring/alerts_manager.cpp
+    monitoring/health_checker.cpp
+    monitoring/prometheus_exporter.cpp
+
+    # Core & Shared
     core/system_manager.cpp
     core/apk_builder.cpp
     core/device_manager.cpp
     shared/protocol.cpp
 )
-target_include_directories(core_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
+
+# Diretórios de inclusão para a biblioteca unificada
+target_include_directories(android_stream_lib PUBLIC
+    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
 )
 
-# Biblioteca Database
-add_library(database_lib STATIC
-    database/database_manager.cpp
-)
-target_include_directories(database_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include>
-)
-
-target_link_libraries(database_lib
+# Dependências da biblioteca unificada
+target_link_libraries(android_stream_lib PUBLIC
+    # Externas
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    ZLIB::ZLIB
     SQLite::SQLite3
+    jwt-cpp
+    # Plataforma
     ${PLATFORM_LIBS}
 )
 
-# Biblioteca Server
-add_library(server_lib STATIC
-    server/stream_server.cpp
-    server/websocket_session.cpp
-    server/http_server.cpp
-)
-target_include_directories(server_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include>
-)
-
-# Encontrar libprocps para monitoramento
-find_library(LIBPROCPS_LIBRARY NAMES procps)
-find_path(LIBPROCPS_INCLUDE_DIR NAMES proc/readproc.h)
-add_library(monitoring_lib STATIC
-    monitoring/metrics_collector.cpp
-    monitoring/alerts_manager.cpp
-    monitoring/health_checker.cpp
-    monitoring/prometheus_exporter.cpp
-)
-target_include_directories(monitoring_lib PUBLIC
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}>
-    $<INSTALL_INTERFACE:include>
-)
-if(LIBPROCPS_LIBRARY)
-    target_link_libraries(monitoring_lib PRIVATE ${LIBPROCPS_LIBRARY})
-    if(LIBPROCPS_INCLUDE_DIR)
-        target_include_directories(monitoring_lib PRIVATE ${LIBPROCPS_INCLUDE_DIR})
-    endif()
+# Dependências opcionais
+if(lz4_FOUND)
+    target_link_libraries(android_stream_lib PUBLIC lz4::lz4)
+endif()
+if(TARGET libzip::zip)
+    target_link_libraries(android_stream_lib PUBLIC libzip::zip)
+endif()
+find_package(libprocps QUIET)
+if(LIBPROCPS_FOUND)
+    target_link_libraries(android_stream_lib PUBLIC ${LIBPROCPS_LIBRARIES})
+    target_include_directories(android_stream_lib PUBLIC ${LIBPROCPS_INCLUDE_DIRS})
 endif()
 
-target_link_libraries(core_lib
-    database_lib
-    optimization_lib
-    security_lib
-    compliance_lib
-    monitoring_lib
-    OpenSSL::Crypto
-    ${LIBZIP_LIBRARY}
-    ${ZLIB_LIBRARIES}
-    ${PLATFORM_LIBS}
-)
+# --- Executáveis ---
 
 # Dashboard Qt
 if(BUILD_DASHBOARD)
-    find_package(Qt6 REQUIRED COMPONENTS Core Widgets Network Multimedia WebSockets)
-
-    # --- Find FFmpeg libraries for real-time decoding ---
+    find_package(Qt6 COMPONENTS Core Widgets Network Multimedia WebSockets)
     find_package(PkgConfig)
     if(PKG_CONFIG_FOUND)
         pkg_check_modules(AVCODEC REQUIRED libavcodec)
@@ -210,9 +178,7 @@ if(BUILD_DASHBOARD)
     endif()
 
     if(Qt6_FOUND)
-        # Configurar Qt6
         set(CMAKE_AUTOMOC ON)
-        set(CMAKE_AUTORCC ON)
         set(CMAKE_AUTOUIC ON)
 
         add_executable(android_stream_dashboard
@@ -224,15 +190,13 @@ if(BUILD_DASHBOARD)
             dashboard/app_monitoring_widget.cpp
             dashboard/resources.qrc
         )
-
-        if(AVCODEC_FOUND)
-            target_include_directories(android_stream_dashboard PRIVATE ${AVCODEC_INCLUDE_DIRS})
-            target_include_directories(android_stream_dashboard PRIVATE ${AVUTIL_INCLUDE_DIRS})
-            target_include_directories(android_stream_dashboard PRIVATE ${SWSCALE_INCLUDE_DIRS})
-        endif()
-
-        target_link_libraries(android_stream_dashboard
-            core_lib
+        target_include_directories(android_stream_dashboard PRIVATE
+            ${AVCODEC_INCLUDE_DIRS}
+            ${AVUTIL_INCLUDE_DIRS}
+            ${SWSCALE_INCLUDE_DIRS}
+        )
+        target_link_libraries(android_stream_dashboard PRIVATE
+            android_stream_lib
             Qt6::Core
             Qt6::Widgets
             Qt6::Network
@@ -242,15 +206,9 @@ if(BUILD_DASHBOARD)
             ${AVUTIL_LIBRARIES}
             ${SWSCALE_LIBRARIES}
         )
-
-        # Configurações específicas do Qt
-        if(WIN32)
-            # Windows - nada especial necessário
-        elseif(UNIX)
-            # Linux - configurações específicas
+        if(UNIX AND NOT APPLE)
             target_compile_definitions(android_stream_dashboard PRIVATE QT_NO_FOREACH)
         endif()
-
     else()
         message(WARNING "Qt6 not found - dashboard will not be built")
         set(BUILD_DASHBOARD OFF)
@@ -259,68 +217,61 @@ endif()
 
 # APK Builder
 if(BUILD_APK_BUILDER)
-    add_executable(apk_builder
-        builder/main.cpp
-    )
-
-    target_link_libraries(apk_builder
-        core_lib
-        ${LIBZIP_LIBRARY}
-        ${ZLIB_LIBRARIES}
+    add_executable(apk_builder builder/main.cpp)
+    target_link_libraries(apk_builder PRIVATE
+        android_stream_lib
+        ZLIB::ZLIB
         ${PLATFORM_LIBS}
     )
+    if(TARGET libzip::zip)
+        target_link_libraries(apk_builder PRIVATE libzip::zip) # libzip é usado aqui
+    endif()
 endif()
 
 # Stream Server
 if(BUILD_SERVER)
-    add_executable(stream_server
-        server/main.cpp
-    )
-
-    target_link_libraries(stream_server
-        server_lib
-        core_lib
+    add_executable(stream_server server/main.cpp)
+    target_link_libraries(stream_server PRIVATE
+        android_stream_lib
         ${PLATFORM_LIBS}
     )
 endif()
 
-# Testes
+# --- Testes ---
 if(BUILD_TESTS)
     enable_testing()
 
-    # Encontrar Google Test (opcional)
+    # Encontrar Google Test (com fallback para FetchContent)
     find_package(GTest)
-
-    if(GTest_FOUND)
-            add_executable(unit_tests
-            tests/test_system_manager.cpp
-            tests/test_apk_builder.cpp
-            tests/test_stream_optimizer.cpp
+    if(NOT GTest_FOUND)
+        message(STATUS "GTest not found. Fetching from source.")
+        FetchContent_Declare(
+            googletest
+            GIT_REPOSITORY https://github.com/google/googletest.git
+            GIT_TAG release-1.12.1
         )
-
-        target_link_libraries(unit_tests
-            core_lib
-            GTest::GTest
-            GTest::Main
-        )
-        add_test(NAME unit_tests COMMAND unit_tests)
-    else()
-        message(WARNING "Google Test not found - unit tests will not be built")
+        FetchContent_MakeAvailable(googletest)
     endif()
 
-    # Teste de streaming
-    add_executable(test_streaming
-        test_streaming.cpp
+    add_executable(unit_tests
+        tests/test_system_manager.cpp
+        tests/test_apk_builder.cpp
+        tests/test_stream_optimizer.cpp
     )
+    target_link_libraries(unit_tests PRIVATE
+        android_stream_lib
+        GTest::GTest
+        GTest::Main
+    )
+    add_test(NAME unit_tests COMMAND unit_tests)
 
-    target_link_libraries(test_streaming
-        core_lib
-    )
+    # Teste de streaming
+    add_executable(test_streaming tests/test_streaming.cpp)
+    target_link_libraries(test_streaming PRIVATE android_stream_lib)
 endif()
 
-# Instalação
-install(TARGETS core_lib optimization_lib security_lib compliance_lib
-    DESTINATION lib)
+# --- Instalação ---
+install(TARGETS android_stream_lib DESTINATION lib)
 
 if(BUILD_DASHBOARD AND Qt6_FOUND)
     install(TARGETS android_stream_dashboard DESTINATION bin)
@@ -340,7 +291,7 @@ install(DIRECTORY shared/ DESTINATION include/android-stream-manager
 install(FILES config/system_config.json
     DESTINATION etc/android-stream-manager/)
 
-# Configuração de CPack para pacotes
+# --- Configuração de CPack para pacotes ---
 set(CPACK_PACKAGE_NAME "android-stream-manager")
 set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
 set(CPACK_PACKAGE_CONTACT "your-email@example.com")
