@@ -1,133 +1,54 @@
-# Created by Gemini Code Assist
-# Comprehensive .gitignore for Android, C++, Qt, and general development
-
-### General ###
-.DS_Store
-.classpath
-.project
-.settings/
-*.swp
-*~
-
-### Operating System Files ###
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-### IDEs ###
-# IntelliJ
-.idea/
-!/.idea/misc.xml
-!/.idea/vcs.xml
-!/.idea/modules.xml
-!/.idea/codeStyles/
-
-# VSCode
-.vscode/
-
-# Qt Creator
-*.pro.user
-*.pro.user.*
-
-### Build artifacts ###
+# Arquivos e diretórios gerados pelo CMake
 build/
-bin/
-lib/
-*.o
-*.a
-*.so
-*.dll
-*.exe
-
-### Android / Gradle ###
-# Generated files
-*.apk
-*.ap_
-*.aab
-*.aar
-
-# Gradle files
-.gradle/
-build/
-
-# Local configuration
-local.properties
-
-# Keystore files
-*.jks
-*.keystore
-
-# Log files
-*.log
-
-# Android Studio profiling data
-captures/
-.cxx/
-
-# Android Studio generated files
-/*/build/
-
-### C++ / CMake ###
-# CMake generated files
+/build-*/
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
 Makefile
+*.cbp
+*.cmake
 install_manifest.txt
 compile_commands.json
 
-# Out-of-source build directories
-build-*/
+# Arquivos gerados pelo CPack (pacotes)
+_CPack_Packages/
 
-### Qt ###
-# Qt-generated files
-moc_*.cpp
-qrc_*.cpp
-ui_*.h
+# Binários e bibliotecas compiladas
+bin/
+lib/
+/bin/
+/lib/
 
-# Qt-specific
-*.qmlc
-*.jsc
+# Arquivos de dependências baixadas (FetchContent)
+/_deps/
 
-### Certificates and Keys ###
-# Self-signed certificates and private keys
+# Arquivos gerados pelo Android Studio/Gradle no template do cliente
+android-client-template/.gradle/
+android-client-template/app/build/
+android-client-template/build/
+android-client-template/local.properties
+
+# Arquivos de IDE
+.idea/
+*.suo
+*.user
+*.sln
+*.vcxproj
+*.vs/
+*.pro.user*
+*.user
+
+# Arquivos de sistema operacional
+.DS_Store
+Thumbs.db
+
+# Logs e arquivos temporários
+*~
+*.log
+*.tmp
+*.temp
+
+# Certificados e chaves (NUNCA adicione segredos ao Git)
 *.key
 *.crt
 *.pem
-
-### Configuration ###
-# Sensitive configuration files
-config/secrets.json
-/etc/default/android-stream-manager
-
-### Logs ###
-logs/
-*.log
-
-### Dependencies ###
-# Dependency directories
-vendor/
-third_party/
-
-### Test Results ###
-coverage/
-*.gcno
-*.gcda
-*.gcov
-
-### Python ###
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.pytest_cache/
-
-### Node.js ###
-node_modules/
-npm-debug.log
-yarn-error.log
-
-### Docs ###
-# Ignore generated documentation
-docs/html
-docs/latex
