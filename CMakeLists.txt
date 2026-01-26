@@ -5,6 +5,9 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+# Política para silenciar o aviso do FetchContent sobre DOWNLOAD_EXTRACT_TIMESTAMP
+set(CMAKE_POLICY_DEFAULT_CMP0135 NEW)
+
 # Opções de build
 option(BUILD_DASHBOARD "Build Qt Dashboard" ON)
 option(BUILD_APK_BUILDER "Build APK Builder" ON)
@@ -48,19 +51,19 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(jwt_cpp)
 
-# LZ4 (tentar encontrar e usar FetchContent como fallback)
-find_package(lz4 QUIET)
-if(NOT lz4_FOUND)
-    message(STATUS "lz4 not found. Fetching from source.")
-    FetchContent_Declare(
-        lz4_fetch
-        GIT_REPOSITORY https://github.com/lz4/lz4.git
-        GIT_TAG        v1.9.4
-    )
-    FetchContent_MakeAvailable(lz4_fetch)
-    # O alvo criado pelo build do lz4 é 'liblz4_static'
-    add_library(lz4::lz4 ALIAS lz4_static)
-endif()
+# LZ4 (Forçar FetchContent para evitar problemas com pacotes de sistema)
+# Força a construção da biblioteca estática dentro do projeto lz4.
+# Esta variável deve ser definida ANTES de FetchContent_Declare para ser eficaz.
+set(BUILD_STATIC_LIBS ON)
+message(STATUS "Fetching lz4 from source for consistency.")
+FetchContent_Declare(
+    lz4_fetch
+    GIT_REPOSITORY https://github.com/lz4/lz4.git
+    GIT_TAG        v1.9.4
+)
+FetchContent_MakeAvailable(lz4_fetch)
+# O alvo criado pelo build do lz4 é 'lz4_static', criamos um alias para ele
+add_library(lz4::lz4 ALIAS lz4_static)
 
 # libzip (tentar encontrar e usar FetchContent como fallback)
 # A busca por libzip pode falhar em sistemas com pacotes quebrados.
@@ -149,9 +152,7 @@ target_link_libraries(android_stream_lib PUBLIC
 )
 
 # Dependências opcionais
-if(lz4_FOUND)
-    target_link_libraries(android_stream_lib PUBLIC lz4::lz4)
-endif()
+target_link_libraries(android_stream_lib PUBLIC lz4::lz4)
 if(TARGET libzip::zip)
     target_link_libraries(android_stream_lib PUBLIC libzip::zip)
 endif()
