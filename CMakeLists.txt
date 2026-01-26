@@ -59,30 +59,26 @@ if(NOT lz4_FOUND)
     )
     FetchContent_MakeAvailable(lz4_fetch)
     # O alvo criado pelo build do lz4 é 'liblz4_static'
-    add_library(lz4::lz4 ALIAS lz4_static) # Correção: removido 'lib' do nome do alvo
+    add_library(lz4::lz4 ALIAS lz4_static)
 endif()
 
 # libzip (tentar encontrar e usar FetchContent como fallback)
 # A busca por libzip pode falhar em sistemas com pacotes quebrados.
 # A lógica a seguir tenta usar o find_package e, se falhar, recorre ao FetchContent.
-find_package(libzip QUIET) 
-if(NOT libzip_FOUND)
-    message(STATUS "libzip not found or broken. Fetching from source.")
-    # Se não for encontrado (ou se a busca falhou), usamos FetchContent.
-    # Isso também lida com o caso de uma instalação de sistema quebrada.
-    FetchContent_Declare(
-        libzip_fetch
-        URL https://libzip.org/download/libzip-1.10.1.tar.gz # Usando uma versão estável
-        URL_HASH SHA256=343b60d839162479d63c5932f93d3b97de13c24a4f6f05793f126944e21198e3
-    )
-    # Desativamos opções que podem buscar por dependências externas desnecessárias
-    # para garantir que ele use as que já encontramos (OpenSSL, ZLIB).
-    set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
-    set(ENABLE_OPENSSL OFF CACHE BOOL "" FORCE) # Já encontramos o OpenSSL fora
-    FetchContent_MakeAvailable(libzip_fetch)
-    add_library(libzip::zip ALIAS zip)
-endif()
+# Forçamos o uso de FetchContent para libzip para evitar problemas com pacotes de sistema quebrados.
+message(STATUS "Fetching libzip from source to avoid system package issues.")
+FetchContent_Declare(
+    libzip_fetch
+    URL https://libzip.org/download/libzip-1.10.1.tar.gz # Usando uma versão estável
+    URL_HASH SHA256=343b60d839162479d63c5932f93d3b97de13c24a4f6f05793f126944e21198e3
+)
+# Desativamos opções que podem buscar por dependências externas desnecessárias (GnuTLS, mbedTLS)
+# e garantimos que ele use a dependência OpenSSL que já encontramos.
+set(ENABLE_GNUTLS OFF CACHE BOOL "" FORCE)
+set(ENABLE_MBEDTLS OFF CACHE BOOL "" FORCE)
+set(ENABLE_OPENSSL ON CACHE BOOL "" FORCE) # Garantir que ele use OpenSSL
+FetchContent_MakeAvailable(libzip_fetch)
+add_library(libzip::zip ALIAS zip)
 
 # --- Configurações Específicas da Plataforma ---
 if(WIN32)
@@ -266,6 +262,7 @@ if(BUILD_TESTS)
     add_test(NAME unit_tests COMMAND unit_tests)
 
     # Teste de streaming
+
     add_executable(test_streaming tests/test_streaming.cpp) # Corrigido o caminho do arquivo de teste
     target_link_libraries(test_streaming PRIVATE android_stream_lib)
 endif()
