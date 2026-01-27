@@ -1,51 +1,20 @@
-# Arquivos e diretórios gerados pelo CMake
+# Arquivos de compilação do CMake
 build/
-/build-*/
-CMakeCache.txt
-CMakeFiles/
-cmake_install.cmake
-Makefile
-*.cbp
-*.cmake
-install_manifest.txt
-compile_commands.json
+**/CMakeCache.txt
+**/CMakeFiles/
+**/cmake_install.cmake
+**/Makefile
 
-# Arquivos gerados pelo CPack (pacotes)
-_CPack_Packages/
+# Binários e bibliotecas geradas
+*.exe
+*.dll
+*.so
+*.a
+*.lib
 
-# Binários e bibliotecas compiladas
-/bin/
-/lib/
-
-# Arquivos de dependências baixadas (FetchContent)
-/_deps/
-
-# Arquivos gerados pelo Android Studio/Gradle no template do cliente
-android-client-template/.gradle/
-android-client-template/app/build/
-android-client-template/build/
-android-client-template/local.properties
-
-# Arquivos de IDE
-.idea/
+# Arquivos de configuração de IDEs
+.vscode/
 *.suo
-*.sln
-*.vcxproj
-*.vs/
-*.pro.user*
 *.user
-
-# Arquivos de sistema operacional
-.DS_Store
-Thumbs.db
-
-# Logs e arquivos temporários
-*~
-*.log
-*.tmp
-*.temp
-
-# Certificados e chaves (NUNCA adicione segredos ao Git)
-*.key
-*.crt
-*.pem
+*.sln
+*.pro.user*

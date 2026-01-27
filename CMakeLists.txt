@@ -52,6 +52,21 @@ set(JWT_BUILD_EXAMPLES OFF)
 set(JWT_BUILD_TESTS OFF)
 FetchContent_MakeAvailable(jwt_cpp)
 
+# uWebSockets (essencial para o servidor de streaming)
+FetchContent_Declare(
+    usockets
+    GIT_REPOSITORY https://github.com/uNetworking/uSockets.git
+    GIT_TAG        v0.8.6
+)
+FetchContent_MakeAvailable(usockets)
+
+FetchContent_Declare(
+    uWebSockets
+    GIT_REPOSITORY https://github.com/uNetworking/uWebSockets.git
+    GIT_TAG        v20.45.0
+)
+FetchContent_MakeAvailable(uWebSockets)
+
 # LZ4 (Forçar FetchContent para evitar problemas com pacotes de sistema)
 # Força a construção da biblioteca estática dentro do projeto lz4.
 # Esta variável deve ser definida ANTES de FetchContent_Declare para ser eficaz.
@@ -154,6 +169,8 @@ target_link_libraries(android_stream_lib PUBLIC
     nlohmann_json::nlohmann_json
     lz4::lz4
     libzip::zip
+    usockets      # Dependência do uWebSockets
+    uWebSockets
     # Plataforma
     ${PLATFORM_LIBS}
 )

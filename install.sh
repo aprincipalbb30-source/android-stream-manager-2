@@ -51,22 +51,22 @@ echo -e "\n${YELLOW}🔧 Etapa 2/5: Instalando dependências do sistema...${NC}"
 DEPS=(
     build-essential
     cmake
-    git
-    pkg-config
-    # Dependências diretas do projeto (encontradas via find_package)
+    git                # Para FetchContent
+    pkg-config         # Para encontrar dependências como FFmpeg
+    # Dependências de compilação
     libssl-dev         # Para OpenSSL (TLS, JWT)
     zlib1g-dev
     libsqlite3-dev
-    # libprocps-dev é opcional e foi removido para evitar erros de instalação.
-    # Dependências para o Dashboard Qt e processamento de vídeo (FFmpeg)
+    # Dependências para o Dashboard Qt
     qt6-base-dev
     qt6-websockets-dev
     qt6-multimedia-dev
+    libxkbcommon-dev   # Dependência de runtime para Qt em servidores
+    # Dependências para processamento de vídeo (FFmpeg)
     libavcodec-dev
-    libavformat-dev    # FFmpeg: formatos de contêiner
+    libavformat-dev
     libavutil-dev
     libswscale-dev
-    libxkbcommon-dev   # Dependência de runtime para Qt em servidores
     # Ferramentas para o APK Builder
     openjdk-17-jdk
     unzip

@@ -1,0 +1,73 @@
+# .github/workflows/ci-build.yml
+#
+# Workflow de Integração Contínua (CI) para o projeto Android Stream Manager.
+#
+# Este workflow automatiza as seguintes tarefas em cada push ou pull request:
+# 1. Configura um ambiente Ubuntu limpo.
+# 2. Instala todas as dependências de sistema necessárias (CMake, Qt6, FFmpeg, etc.).
+# 3. Compila o projeto em modo de Debug, incluindo os testes.
+# 4. Executa os testes unitários para validar a funcionalidade principal.
+#
+name: CI Build e Testes
+
+# Gatilhos: Executa o workflow em pushes para a branch 'main' e em pull requests abertos contra 'main'.
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+jobs:
+  # O único job, que executa todo o processo de build e teste.
+  build-and-test:
+    # Executa em um ambiente virtual Ubuntu mais recente fornecido pelo GitHub.
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Checkout do código-fonte
+      # Baixa o código do seu repositório para o ambiente do runner.
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      # 2. Instalação das dependências do sistema
+      # Instala os pacotes APT necessários para compilar o projeto, incluindo Qt6 e FFmpeg.
+      - name: Instalar dependências do sistema
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential \
+            cmake \
+            git \
+            pkg-config \
+            libssl-dev \
+            zlib1g-dev \
+            libsqlite3-dev \
+            qt6-base-dev \
+            qt6-websockets-dev \
+            qt6-multimedia-dev \
+            libxkbcommon-dev \
+            libavcodec-dev \
+            libavformat-dev \
+            libavutil-dev \
+            libswscale-dev
+
+      # 3. Configuração do CMake
+      # Cria um diretório de build e executa o CMake para gerar os arquivos de build.
+      # -DCMAKE_BUILD_TYPE=Debug: Habilita símbolos de depuração.
+      # -DBUILD_TESTS=ON: Garante que os alvos de teste sejam criados.
+      - name: Configurar CMake
+        run: cmake -B build -DCMAKE_BUILD_TYPE=Debug -DBUILD_TESTS=ON
+
+      # 4. Compilação do projeto
+      # Usa o CMake para invocar o sistema de build (make) e compilar o projeto.
+      # O -- -j$(nproc) utiliza todos os cores disponíveis para acelerar a compilação.
+      - name: Compilar projeto
+        run: cmake --build build -- -j$(nproc)
+
+      # 5. Execução dos testes
+      # Executa o CTest a partir do diretório de build para rodar todos os testes definidos.
+      # --output-on-failure exibe os logs dos testes apenas se eles falharem.
+      - name: Executar testes
+        run: |
+          cd build
+          ctest --output-on-failure
