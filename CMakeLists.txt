@@ -14,13 +14,11 @@ option(BUILD_APK_BUILDER "Build APK Builder" ON)
 option(BUILD_SERVER "Build Stream Server" ON)
 option(BUILD_TESTS "Build unit tests" OFF)
 
-# Diretórios
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-
-# Incluir diretórios
-# REMOVIDO: include_directories globais. Usaremos target_include_directories por alvo.
+# Incluir GNUInstallDirs para caminhos de instalação padrão (e.g., /usr/local/bin)
+include(GNUInstallDirs)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_BINDIR})
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/${CMAKE_INSTALL_LIBDIR})
 
 # Encontrar dependências
 find_package(OpenSSL REQUIRED)
@@ -38,8 +36,8 @@ include(FetchContent)
 # Biblioteca JSON nlohmann (header-only)
 FetchContent_Declare(
     nlohmann_json
-    URL https://github.com/nlohmann/json/releases/download/v3.11.2/json.hpp
-    DOWNLOAD_NO_EXTRACT TRUE
+    GIT_REPOSITORY https://github.com/nlohmann/json.git
+    GIT_TAG        v3.11.2
 )
 FetchContent_MakeAvailable(nlohmann_json)
 
@@ -49,6 +47,9 @@ FetchContent_Declare(
     GIT_REPOSITORY https://github.com/Thalhammer/jwt-cpp.git
     GIT_TAG        v0.7.0
 )
+# Desabilitar a construção de exemplos e testes da dependência para evitar erros de linkagem.
+set(JWT_BUILD_EXAMPLES OFF)
+set(JWT_BUILD_TESTS OFF)
 FetchContent_MakeAvailable(jwt_cpp)
 
 # LZ4 (Forçar FetchContent para evitar problemas com pacotes de sistema)
@@ -60,6 +61,7 @@ FetchContent_Declare(
     lz4_fetch
     GIT_REPOSITORY https://github.com/lz4/lz4.git
     GIT_TAG        v1.9.4
+    SOURCE_SUBDIR  build/cmake # Aponta para o diretório correto do CMakeLists.txt do lz4
 )
 FetchContent_MakeAvailable(lz4_fetch)
 # O alvo criado pelo build do lz4 é 'lz4_static', criamos um alias para ele
@@ -73,7 +75,7 @@ message(STATUS "Fetching libzip from source to avoid system package issues.")
 FetchContent_Declare(
     libzip_fetch
     URL https://libzip.org/download/libzip-1.10.1.tar.gz # Usando uma versão estável
-    URL_HASH SHA256=343b60d839162479d63c5932f93d3b97de13c24a4f6f05793f126944e21198e3
+    URL_HASH SHA256=9669ae5dfe3ac5b3897536dc8466a874c8cf2c0e3b1fdd08d75b273884299363
 )
 # Desativamos opções que podem buscar por dependências externas desnecessárias (GnuTLS, mbedTLS)
 # e garantimos que ele use a dependência OpenSSL que já encontramos.
@@ -137,6 +139,8 @@ add_library(android_stream_lib STATIC
 target_include_directories(android_stream_lib PUBLIC
     $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>
     $<INSTALL_INTERFACE:include>
+    ${nlohmann_json_SOURCE_DIR}/include
+    ${lz4_fetch_SOURCE_DIR}/lib
 )
 
 # Dependências da biblioteca unificada
@@ -147,6 +151,9 @@ target_link_libraries(android_stream_lib PUBLIC
     ZLIB::ZLIB
     SQLite::SQLite3
     jwt-cpp
+    nlohmann_json::nlohmann_json
+    lz4::lz4
+    libzip::zip
     # Plataforma
     ${PLATFORM_LIBS}
 )
@@ -154,12 +161,11 @@ target_link_libraries(android_stream_lib PUBLIC
 # Dependências opcionais
 target_link_libraries(android_stream_lib PUBLIC lz4::lz4)
 if(TARGET libzip::zip)
-    target_link_libraries(android_stream_lib PUBLIC libzip::zip)
-endif()
 find_package(libprocps QUIET)
 if(LIBPROCPS_FOUND)
     target_link_libraries(android_stream_lib PUBLIC ${LIBPROCPS_LIBRARIES})
     target_include_directories(android_stream_lib PUBLIC ${LIBPROCPS_INCLUDE_DIRS})
+endif()
 endif()
 
 # --- Executáveis ---
@@ -269,21 +275,21 @@ if(BUILD_TESTS)
 endif()
 
 # --- Instalação ---
-install(TARGETS android_stream_lib DESTINATION lib)
+install(TARGETS android_stream_lib DESTINATION ${CMAKE_INSTALL_LIBDIR})
 
 if(BUILD_DASHBOARD AND Qt6_FOUND)
-    install(TARGETS android_stream_dashboard DESTINATION bin)
+    install(TARGETS android_stream_dashboard DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if(BUILD_APK_BUILDER)
-    install(TARGETS apk_builder DESTINATION bin)
+    install(TARGETS apk_builder DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
 if(BUILD_SERVER)
-    install(TARGETS stream_server DESTINATION bin)
+    install(TARGETS stream_server DESTINATION ${CMAKE_INSTALL_BINDIR})
 endif()
 
-install(DIRECTORY shared/ DESTINATION include/android-stream-manager
+install(DIRECTORY shared/ DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/android-stream-manager
     FILES_MATCHING PATTERN "*.h")
 
 install(FILES config/system_config.json
