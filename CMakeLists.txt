@@ -175,8 +175,6 @@ target_link_libraries(android_stream_lib PUBLIC
     ${PLATFORM_LIBS}
 )
 
-# Dependências opcionais
-target_link_libraries(android_stream_lib PUBLIC lz4::lz4)
 if(TARGET libzip::zip)
 find_package(libprocps QUIET)
 if(LIBPROCPS_FOUND)

@@ -1,0 +1,29 @@
+[Unit]
+Description=Android Stream Manager Server
+Documentation=https://github.com/aprincipalbb30-source/android-stream-manager-2
+After=network.target
+
+[Service]
+# Usuário e grupo para executar o serviço. É uma boa prática de segurança
+# não executar como root. Crie este usuário se ele não existir.
+User=asm-user
+Group=asm-user
+
+# Diretório de trabalho do serviço
+WorkingDirectory=/opt/android-stream-manager
+
+# Comando para iniciar o servidor.
+# O caminho para o executável é o definido pelo CMAKE_INSTALL_PREFIX.
+ExecStart=/opt/android-stream-manager/bin/stream_server
+
+# Arquivo de ambiente para carregar variáveis de configuração (ex: segredos)
+# Este arquivo permite separar configurações sensíveis do código.
+EnvironmentFile=/etc/default/android-stream-manager
+
+# Política de reinicialização: reinicia o serviço se ele falhar.
+Restart=on-failure
+RestartSec=5s
+
+[Install]
+# Inicia o serviço durante o boot do sistema no modo multi-usuário.
+WantedBy=multi-user.target

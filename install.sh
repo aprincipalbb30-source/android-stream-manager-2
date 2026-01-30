@@ -16,7 +16,7 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 echo -e "${BLUE}===================================================${NC}"
-echo -e "${BLUE}🚀 Instalador de Produção do Android Stream Manager 🚀${NC}"
+echo -e "${BLUE}🚀 Instalador e Configurador de Produção do Android Stream Manager 🚀${NC}"
 echo -e "${BLUE}===================================================${NC}"
 
 # --- 1. Verificação de Root ---
@@ -34,51 +34,36 @@ fi
 
 echo -e "\n${GREEN}✅ Verificações iniciais concluídas.${NC}"
 
-# --- 3. Coleta de Informações para Produção ---
-echo -e "\n${YELLOW}📝 Etapa 1/5: Configuração do ambiente de produção...${NC}"
-
-read -p "Por favor, insira o nome de domínio (hostname) para este servidor (ex: stream.suaempresa.com): " SERVER_HOSTNAME
-if [ -z "$SERVER_HOSTNAME" ]; then
-    echo -e "${RED}ERRO: O nome de domínio é obrigatório para a configuração de produção.${NC}"
-    exit 1
-fi
-
-echo -e "${GREEN}Hostname configurado para: $SERVER_HOSTNAME${NC}"
-
 # --- 3. Instalação de Dependências (Debian/Ubuntu) ---
-echo -e "\n${YELLOW}🔧 Etapa 2/5: Instalando dependências do sistema...${NC}"
+echo -e "\n${YELLOW}🔧 Etapa 1/4: Instalando dependências do sistema...${NC}"
 
 DEPS=(
     build-essential
     cmake
-    git                # Para FetchContent
-    pkg-config         # Para encontrar dependências como FFmpeg
-    # Dependências de compilação
-    libssl-dev         # Para OpenSSL (TLS, JWT)
+    git
+    pkg-config
+    libssl-dev
     zlib1g-dev
     libsqlite3-dev
-    # Dependências para o Dashboard Qt
     qt6-base-dev
     qt6-websockets-dev
     qt6-multimedia-dev
-    libxkbcommon-dev   # Dependência de runtime para Qt em servidores
-    # Dependências para processamento de vídeo (FFmpeg)
     libavcodec-dev
-    libavformat-dev
     libavutil-dev
     libswscale-dev
-    # Ferramentas para o APK Builder
-    openjdk-17-jdk
-    unzip
+    libxkbcommon-dev
 )
 
 apt-get update
 apt-get install -y "${DEPS[@]}"
 
-echo -e "\n${GREEN}✅ Dependências instaladas com sucesso.${NC}"
+echo -e "\n${GREEN}✅ Dependências do sistema instaladas com sucesso.${NC}"
+echo -e "${YELLOW}Nota: jwt-cpp, nlohmann_json, lz4, e libzip serão baixados e compilados pelo CMake (FetchContent).${NC}"
 
 # --- 4. Compilação do Projeto ---
-echo -e "\n${YELLOW}🏗️ Etapa 3/5: Compilando o projeto para produção...${NC}"
+echo -e "\n${YELLOW}🏗️ Etapa 2/4: Compilando o projeto para produção...${NC}"
+
+INSTALL_DIR="/opt/android-stream-manager"
 
 if [ -d "build" ]; then
     echo "Diretório 'build' existente. Removendo para uma compilação limpa..."
@@ -89,7 +74,7 @@ mkdir build
 cd build
 
 echo "Configurando com CMake..."
-cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF
+cmake .. -DCMAKE_BUILD_TYPE=Release -DBUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=${INSTALL_DIR}
 
 echo "Compilando com make (utilizando todos os cores disponíveis)..."
 if ! make -j$(nproc); then
@@ -97,54 +82,83 @@ if ! make -j$(nproc); then
     exit 1
 fi
 
-cd ..
-echo -e "\n${GREEN}✅ Projeto compilado com sucesso! Binários estão em 'build/bin'.${NC}"
+echo -e "\n${GREEN}✅ Projeto compilado com sucesso!${NC}"
 
-# --- 5. Verificação de Certificados SSL ---
-echo -e "\n${YELLOW}🔐 Etapa 4/5: Verificando certificados SSL...${NC}"
-CERT_DIR="/etc/android-stream-manager/certs"
-mkdir -p "$CERT_DIR" # Garante que o diretório exista
+# --- 5. Instalação do Sistema ---
+echo -e "\n${YELLOW}⚙️ Etapa 3/4: Instalando o sistema em ${INSTALL_DIR}...${NC}"
 
-if [ -f "${CERT_DIR}/server.crt" ] && [ -f "${CERT_DIR}/server.key" ]; then
-    echo -e "${GREEN}✅ Certificados SSL encontrados em ${CERT_DIR}.${NC}"
-else
-    echo -e "${YELLOW}AVISO: Certificados SSL não encontrados em ${CERT_DIR}.${NC}"
-    echo -e "${YELLOW}Para produção, você DEVE fornecer certificados válidos ('server.crt' e 'server.key').${NC}"
-    echo -e "${YELLOW}Você pode usar Let's Encrypt (certbot) ou outro provedor de sua escolha.${NC}"
+make install
+
+echo -e "\n${GREEN}✅ Sistema instalado com sucesso.${NC}"
+
+# --- 6. Configuração do Serviço de Produção ---
+echo -e "\n${YELLOW}🚀 Etapa 4/4: Configurando o ambiente de produção (usuário e serviço systemd)...${NC}"
+
+# Criar usuário e grupo do serviço
+SERVICE_USER="asm-user"
+if ! getent group ${SERVICE_USER} > /dev/null; then
+    echo "Criando grupo de sistema '${SERVICE_USER}'..."
+    groupadd --system ${SERVICE_USER}
+fi
+if ! id -u ${SERVICE_USER} > /dev/null 2>&1; then
+    echo "Criando usuário de sistema '${SERVICE_USER}'..."
+    useradd --system --no-create-home --gid ${SERVICE_USER} --shell /bin/false \
+        --comment "Android Stream Manager Service" ${SERVICE_USER}
 fi
 
-# --- 6. Instalação do Sistema ---
-echo -e "\n${YELLOW}⚙️ Etapa 5/5: Configurando o sistema (usuário, serviço, diretórios...)${NC}"
+# Criar diretórios de dados, logs e configuração
+echo "Criando diretórios de dados e logs..."
+mkdir -p /var/lib/android-stream-manager
+mkdir -p /var/log/android-stream-manager
 
-if [ ! -f "scripts/init_system.sh" ]; then
-    echo -e "${RED}ERRO: O script 'scripts/init_system.sh' não foi encontrado!${NC}"
-    exit 1
+# Definir permissões
+echo "Configurando permissões dos diretórios..."
+chown -R ${SERVICE_USER}:${SERVICE_USER} ${INSTALL_DIR}
+chown -R ${SERVICE_USER}:${SERVICE_USER} /var/lib/android-stream-manager
+chown -R ${SERVICE_USER}:${SERVICE_USER} /var/log/android-stream-manager
+# O diretório /etc/android-stream-manager é criado pelo 'make install'
+chown -R root:${SERVICE_USER} /etc/android-stream-manager
+chmod 775 /etc/android-stream-manager
+
+# Instalar o serviço systemd
+if [ -f "scripts/android-stream-manager.service" ]; then
+    echo "Instalando arquivo de serviço systemd..."
+    cp scripts/android-stream-manager.service /etc/systemd/system/android-stream-manager.service
+    
+    # Criar arquivo de ambiente padrão
+    echo "Criando arquivo de ambiente padrão em /etc/default/android-stream-manager..."
+    cat > /etc/default/android-stream-manager << 'EOF'
+# Arquivo de ambiente para o serviço Android Stream Manager
+# EDITE ESTE ARQUIVO COM SUAS CONFIGURAÇÕES DE PRODUÇÃO
+
+# Segredo para assinar os tokens JWT. DEVE ser alterado para um valor longo e aleatório.
+JWT_SECRET="segredo-padrao-inseguro-altere-imediatamente"
+
+# Caminho para o banco de dados SQLite
+DB_PATH="/var/lib/android-stream-manager/database.sqlite"
+EOF
+    chown root:${SERVICE_USER} /etc/default/android-stream-manager
+    chmod 640 /etc/default/android-stream-manager
+
+    systemctl daemon-reload
+    echo -e "${GREEN}✅ Serviço systemd configurado. Use 'systemctl start android-stream-manager' para iniciá-lo.${NC}"
 fi
-
-chmod +x scripts/init_system.sh
-# Passa o hostname para o script de inicialização
-scripts/init_system.sh "$SERVER_HOSTNAME"
-
-echo -e "\n${GREEN}✅ Configuração do sistema concluída.${NC}"
 
 # --- Conclusão ---
 echo -e "\n${BLUE}===================================================${NC}"
 echo -e "${GREEN}🎉 Instalação de Produção Finalizada! 🎉${NC}"
 echo -e "${BLUE}===================================================${NC}"
-echo -e "\n${YELLOW}⚠️ PRÓXIMOS PASSOS OBRIGATÓRIOS:${NC}"
-echo -e "1. ${YELLOW}Configure um registro DNS para o seu hostname '${SERVER_HOSTNAME}' apontando para o IP deste servidor.${NC}"
+echo -e "\n${YELLOW}⚠️ PRÓXIMOS PASSOS:${NC}"
+echo -e "1. ${YELLOW}Os binários e bibliotecas foram instalados em '${INSTALL_DIR}'.${NC}"
+echo -e "   - Executáveis: ${INSTALL_DIR}/bin/"
+echo -e "   - Bibliotecas: ${INSTALL_DIR}/lib/"
+echo -e "   - Arquivo de Configuração: ${INSTALL_DIR}/etc/android-stream-manager/system_config.json"
 echo ""
-echo -e "2. ${YELLOW}Instale certificados SSL válidos em '${CERT_DIR}'.${NC}"
-echo -e "   Exemplo usando Let's Encrypt: sudo certbot certonly --standalone -d ${SERVER_HOSTNAME}"
-echo -e "   Depois, copie os arquivos para o diretório correto."
-echo ""
-echo -e "3. ${YELLOW}Edite o arquivo de ambiente com suas chaves e senhas:${NC}"
+echo -e "2. ${YELLOW}Edite o arquivo de ambiente com seu segredo JWT e outras configurações:${NC}"
 echo -e "   sudo nano /etc/default/android-stream-manager"
-echo -e "   (Especialmente JWT_SECRET, KEYSTORE_PASSWORD, e ANDROID_SDK_ROOT se for construir APKs)"
 echo ""
-echo -e "4. ${YELLOW}Após configurar tudo, inicie e habilite o serviço:${NC}"
-echo -e "   sudo systemctl start android-stream-manager"
-echo -e "   sudo systemctl enable android-stream-manager"
+echo -e "3. ${YELLOW}Para iniciar o serviço, execute:${NC} sudo systemctl start android-stream-manager"
+echo -e "   ${YELLOW}Para habilitá-lo na inicialização:${NC} sudo systemctl enable android-stream-manager"
 echo ""
 
 exit 0

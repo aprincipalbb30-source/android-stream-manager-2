@@ -51,6 +51,19 @@ jobs:
             libavutil-dev \
             libswscale-dev
 
+      # 3. Cache das dependências do FetchContent
+      # Armazena em cache o diretório _deps dentro do diretório de build para evitar
+      # baixar e compilar novamente as dependências em cada execução.
+      # A chave do cache é baseada no hash do CMakeLists.txt, então o cache é
+      # invalidado e recriado se as dependências mudarem.
+      - name: Cache de dependências do FetchContent
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/build/_deps
+          key: deps-cache-${{ runner.os }}-${{ hashFiles('**/CMakeLists.txt') }}
+          restore-keys: |
+            deps-cache-${{ runner.os }}-
+
       # 3. Configuração do CMake
       # Cria um diretório de build e executa o CMake para gerar os arquivos de build.
       # -DCMAKE_BUILD_TYPE=Debug: Habilita símbolos de depuração.
